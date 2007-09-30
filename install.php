@@ -15,7 +15,7 @@
  
 @include('config.php');
 if( ( defined('ENANO_INSTALLED') || defined('MIDGET_INSTALLED') ) && ((isset($_GET['mode']) && ($_GET['mode']!='finish' && $_GET['mode']!='css')) || !isset($_GET['mode']))) {
-  $_GET['title'] = 'Enano:WhoCaresWhatThisIs';
+  $_GET['title'] = 'Enano:Installation_locked';
   require('includes/common.php');
   die_friendly('Installation locked', '<p>The Enano installer has found a Enano installation in this directory. You MUST delete config.php if you want to re-install Enano.</p><p>If you wish to upgrade an older Enano installation to this version, please use the <a href="upgrade.php">upgrade script</a>.</p>');
   exit;
@@ -25,7 +25,6 @@ define('IN_ENANO_INSTALL', 'true');
 
 define('ENANO_VERSION', '1.0.2');
 // In beta versions, define ENANO_BETA_VERSION here
-define('ENANO_BETA_VERSION', '1');
 
 if(!defined('scriptPath')) {
   $sp = dirname($_SERVER['REQUEST_URI']);
@@ -261,7 +260,7 @@ EOF;
 }
 
 $template = new template_nodb();
-$template->load_theme('stpatty', 'shamrock', false);
+$template->load_theme('oxygen', 'bleu', false);
 
 $modestrings = Array(
               'welcome' => 'Welcome',
@@ -314,9 +313,9 @@ switch($_GET['mode'])
   case 'welcome':
     ?>
     <div style="text-align: center; margin-top: 10px;">
-      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-green.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
+      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-blue.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
       <h2>Welcome to Enano</h2>
-      <h3>version 1.0.2 &ndash; beta 1<br />
+      <h3>version 1.0.2 &ndash; stable<br />
       <span style="font-weight: normal;">also affectionately known as "coblynau" <tt>:)</tt></span></h3>
       <?php
       if ( file_exists('./_nightly.php') )
@@ -1066,7 +1065,8 @@ switch($_GET['mode'])
       $schema = str_replace('{{TABLE_PREFIX}}', $_POST['table_prefix'],                          $schema);
       $schema = str_replace('{{VERSION}}',      ENANO_VERSION,                                   $schema);
       $schema = str_replace('{{ADMIN_EMBED_PHP}}', $_POST['admin_embed_php'],                    $schema);
-      $schema = str_replace('{{BETA_VERSION}}', ENANO_BETA_VERSION,                              $schema);
+      // Not anymore!! :-D
+      // $schema = str_replace('{{BETA_VERSION}}', ENANO_BETA_VERSION,                              $schema);
       
       if(isset($_POST['wiki_mode']))
       {
