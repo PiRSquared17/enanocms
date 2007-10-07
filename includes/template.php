@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.1.1
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -783,7 +783,13 @@ class template {
     dc_here('template: generating and sending the page header');
     if(!defined('ENANO_HEADERS_SENT'))
       define('ENANO_HEADERS_SENT', '');
-    if(!$this->no_headers) echo ( $simple ) ? $this->process_template('simple-header.tpl') : $this->process_template('header.tpl');
+    if ( !$this->no_headers )
+    {
+      $header = ( $simple ) ?
+        $this->process_template('simple-header.tpl') :
+        $this->process_template('header.tpl');
+      echo $header;
+    }
     if ( !$simple && $session->user_logged_in && $session->unread_pms > 0 )
     {
       echo $this->notify_unread_pms();
