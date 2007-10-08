@@ -1,8 +1,8 @@
 <?php
 
-/**
+/*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * @Version 1.0.2 (Coblynau)
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@
 
   // Set up gzip encoding before any output is sent
   
-  $aggressive_optimize_html = true;
+  $aggressive_optimize_html = false;
   
   global $do_gzip;
   $do_gzip = true;
@@ -141,6 +141,11 @@
           <input type="submit" name="_cancel" value="Cancel" />
         </form>
       ';
+      if ( getConfig('wiki_edit_notice') == '1' )
+      {
+        $notice = getConfig('wiki_edit_notice_text');
+        echo RenderMan::render($notice);
+      }
       $template->footer();
       break;
     case 'viewsource':

@@ -1789,6 +1789,26 @@ function hexdecode($hex)
 
 function sanitize_html($html, $filter_php = true)
 {
+  // Random seed for substitution
+  $rand_seed = md5( sha1(microtime()) . mt_rand() );
+  
+  // Strip out comments that are already escaped
+  preg_match_all('/&lt;!--(.*?)--&gt;/', $html, $comment_match);
+  $i = 0;
+  foreach ( $comment_match[0] as $comment )
+  {
+    $html = str_replace_once($comment, "{HTMLCOMMENT:$i:$rand_seed}", $html);
+    $i++;
+  }
+  
+  // Strip out code sections that will be postprocessed by Text_Wiki
+  preg_match_all(';^<code(\s[^>]*)?>((?:(?R)|.)*?)\n</code>(\s|$);msi', $html, $code_match);
+  $i = 0;
+  foreach ( $code_match[0] as $code )
+  {
+    $html = str_replace_once($code, "{TW_CODE:$i:$rand_seed}", $html);
+    $i++;
+  }
 
   $html = preg_replace('#<([a-z]+)([\s]+)([^>]+?)'.htmlalternatives('javascript:').'(.+?)>(.*?)</\\1>#is', '&lt;\\1\\2\\3javascript:\\59&gt;\\60&lt;/\\1&gt;', $html);
   $html = preg_replace('#<([a-z]+)([\s]+)([^>]+?)'.htmlalternatives('javascript:').'(.+?)>#is', '&lt;\\1\\2\\3javascript:\\59&gt;', $html);
@@ -1802,6 +1822,8 @@ function sanitize_html($html, $filter_php = true)
   $tag_whitelist = array_keys ( setupAttributeWhitelist() );
   if ( !$filter_php )
     $tag_whitelist[] = '?php';
+  // allow HTML comments
+  $tag_whitelist[] = '!--';
   $len = strlen($html);
   $in_quote = false;
   $quote_char = '';
@@ -1862,7 +1884,11 @@ function sanitize_html($html, $filter_php = true)
       }
       else
       {
+        // If not filtering PHP, don't bother to strip
         if ( $tag_name == '?php' && !$filter_php )
+          continue;
+        // If this is a comment, likewise skip this "tag"
+        if ( $tag_name == '!--' )
           continue;
         $f = fixTagAttributes( $attribs_only, $tag_name );
         $s = ( empty($f) ) ? '' : ' ';
@@ -1891,15 +1917,28 @@ function sanitize_html($html, $filter_php = true)
     }
 
   }
-
+  
   // Vulnerability from ha.ckers.org/xss.html:
   // <script src="http://foo.com/xss.js"
   // <
   // The rule is so specific because everything else will have been filtered by now
   $html = preg_replace('/<(script|iframe)(.+?)src=([^>]*)</i', '&lt;\\1\\2src=\\3&lt;', $html);
 
-  // Unstrip comments
-  $html = preg_replace('/&lt;!--([^>]*?)--&gt;/i', '', $html);
+  // Restore stripped comments
+  $i = 0;
+  foreach ( $comment_match[0] as $comment )
+  {
+    $html = str_replace_once("{HTMLCOMMENT:$i:$rand_seed}", $comment, $html);
+    $i++;
+  }
+  
+  // Restore stripped code
+  $i = 0;
+  foreach ( $code_match[0] as $code )
+  {
+    $html = str_replace_once("{TW_CODE:$i:$rand_seed}", $code, $html);
+    $i++;
+  }
 
   return $html;
 
@@ -2705,7 +2744,7 @@ function decode_unicode_array($array)
 function sanitize_tag($tag)
 {
   $tag = strtolower($tag);
-  $tag = preg_replace('/[^\w _-]+/', '', $tag);
+  $tag = preg_replace('/[^\w _@\$%\^&-]+/', '', $tag);
   $tag = trim($tag);
   return $tag;
 }
