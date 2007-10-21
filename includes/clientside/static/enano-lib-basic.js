@@ -264,6 +264,7 @@ var thefiles = [
   'admin-menu.js',
   'ajax.js',
   'autocomplete.js',
+  'autofill.js',
   'base64.js',
   'dropdown.js',
   'faders.js',
@@ -283,6 +284,7 @@ var thefiles = [
   'flyin.js',
   'paginate.js',
   'pwstrength.js',
+  'SpryEffects.js',
   'loader.js'
 ];
 

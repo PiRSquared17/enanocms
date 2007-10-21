@@ -1789,6 +1789,26 @@ function hexdecode($hex)
 
 function sanitize_html($html, $filter_php = true)
 {
+  // Random seed for substitution
+  $rand_seed = md5( sha1(microtime()) . mt_rand() );
+  
+  // Strip out comments that are already escaped
+  preg_match_all('/&lt;!--(.*?)--&gt;/', $html, $comment_match);
+  $i = 0;
+  foreach ( $comment_match[0] as $comment )
+  {
+    $html = str_replace_once($comment, "{HTMLCOMMENT:$i:$rand_seed}", $html);
+    $i++;
+  }
+  
+  // Strip out code sections that will be postprocessed by Text_Wiki
+  preg_match_all(';^<code(\s[^>]*)?>((?:(?R)|.)*?)\n</code>(\s|$);msi', $html, $code_match);
+  $i = 0;
+  foreach ( $code_match[0] as $code )
+  {
+    $html = str_replace_once($code, "{TW_CODE:$i:$rand_seed}", $html);
+    $i++;
+  }
 
   $html = preg_replace('#<([a-z]+)([\s]+)([^>]+?)'.htmlalternatives('javascript:').'(.+?)>(.*?)</\\1>#is', '&lt;\\1\\2\\3javascript:\\59&gt;\\60&lt;/\\1&gt;', $html);
   $html = preg_replace('#<([a-z]+)([\s]+)([^>]+?)'.htmlalternatives('javascript:').'(.+?)>#is', '&lt;\\1\\2\\3javascript:\\59&gt;', $html);
@@ -1802,6 +1822,8 @@ function sanitize_html($html, $filter_php = true)
   $tag_whitelist = array_keys ( setupAttributeWhitelist() );
   if ( !$filter_php )
     $tag_whitelist[] = '?php';
+  // allow HTML comments
+  $tag_whitelist[] = '!--';
   $len = strlen($html);
   $in_quote = false;
   $quote_char = '';
@@ -1862,7 +1884,11 @@ function sanitize_html($html, $filter_php = true)
       }
       else
       {
+        // If not filtering PHP, don't bother to strip
         if ( $tag_name == '?php' && !$filter_php )
+          continue;
+        // If this is a comment, likewise skip this "tag"
+        if ( $tag_name == '!--' )
           continue;
         $f = fixTagAttributes( $attribs_only, $tag_name );
         $s = ( empty($f) ) ? '' : ' ';
@@ -1891,15 +1917,28 @@ function sanitize_html($html, $filter_php = true)
     }
 
   }
-
+  
   // Vulnerability from ha.ckers.org/xss.html:
   // <script src="http://foo.com/xss.js"
   // <
   // The rule is so specific because everything else will have been filtered by now
   $html = preg_replace('/<(script|iframe)(.+?)src=([^>]*)</i', '&lt;\\1\\2src=\\3&lt;', $html);
 
-  // Unstrip comments
-  $html = preg_replace('/&lt;!--([^>]*?)--&gt;/i', '', $html);
+  // Restore stripped comments
+  $i = 0;
+  foreach ( $comment_match[0] as $comment )
+  {
+    $html = str_replace_once("{HTMLCOMMENT:$i:$rand_seed}", $comment, $html);
+    $i++;
+  }
+  
+  // Restore stripped code
+  $i = 0;
+  foreach ( $code_match[0] as $code )
+  {
+    $html = str_replace_once("{TW_CODE:$i:$rand_seed}", $code, $html);
+    $i++;
+  }
 
   return $html;
 
@@ -2705,7 +2744,7 @@ function decode_unicode_array($array)
 function sanitize_tag($tag)
 {
   $tag = strtolower($tag);
-  $tag = preg_replace('/[^\w _-]+/', '', $tag);
+  $tag = preg_replace('/[^\w _@\$%\^&-]+/', '', $tag);
   $tag = trim($tag);
   return $tag;
 }
@@ -2757,7 +2796,7 @@ function aggressive_optimize_html($html)
   $strip_tags = implode('|', $strip_tags);
   
   // Strip out the tags and replace with placeholders
-  preg_match_all("#<($strip_tags)(.*?)>(.*?)</($strip_tags)>#is", $html, $matches);
+  preg_match_all("#<($strip_tags)([ ]+.*?)?>(.*?)</($strip_tags)>#is", $html, $matches);
   $seed = md5(microtime() . mt_rand()); // Random value used for placeholders
   for ($i = 0;$i < sizeof($matches[1]); $i++)
   {
@@ -2765,7 +2804,7 @@ function aggressive_optimize_html($html)
   }
   
   // Optimize (but don't obfuscate) Javascript
-  preg_match_all('/<script(.*?)>(.+?)<\/script>/is', $html, $jscript);
+  preg_match_all('/<script([ ]+.*?)?>(.*?)(\]\]>)?<\/script>/is', $html, $jscript);
   
   // list of Javascript reserved words - from about.com
   $reserved_words = array('abstract', 'as', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'continue', 'const', 'debugger', 'default', 'delete', 'do',
@@ -2779,6 +2818,8 @@ function aggressive_optimize_html($html)
   for ( $i = 0; $i < count($jscript[0]); $i++ )
   {
     $js =& $jscript[2][$i];
+    
+    // echo('<pre>' . "-----------------------------------------------------------------------------\n" . htmlspecialchars($js) . '</pre>');
     
     // for line optimization, explode it
     $particles = explode("\n", $js);
@@ -3125,6 +3166,20 @@ function password_score($password, &$debug = false)
   }
   
   return $score;
+}
+
+/**
+ * Registers a task that will be run every X hours. Scheduled tasks should always be scheduled at runtime - they are not stored in the DB.
+ * @param string Function name to call, or array(object, string method)
+ * @param int Interval between runs, in hours. Defaults to 24.
+ */
+
+function register_cron_task($func, $hour_interval = 24)
+{
+  global $cron_tasks;
+  if ( !isset($cron_tasks[$hour_interval]) )
+    $cron_tasks[$hour_interval] = array();
+  $cron_tasks[$hour_interval][] = $func;
 }
 
 //die('<pre>Original:  01010101010100101010100101010101011010'."\nProcessed: ".uncompress_bitfield(compress_bitfield('01010101010100101010100101010101011010')).'</pre>');

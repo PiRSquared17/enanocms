@@ -4,13 +4,13 @@ Plugin Name: Special page-related pages
 Plugin URI: http://enanocms.org/
 Description: Provides the page Special:CreatePage, which can be used to create new pages. Also adds the About Enano and GNU General Public License pages.
 Author: Dan Fuhry
-Version: 1.0.1
+Version: 1.0.2
 Author URI: http://enanocms.org/
 */
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0 release candidate 2
+ * Version 1.0.2
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -109,6 +109,17 @@ function page_Special_CreatePage()
       
       exit;
     }
+    if ( substr($urlname, 0, 8) == 'Project:' )
+    {
+      $template->header();
+      
+      echo '<h3>The page could not be created.</h3><p>The page title can\'t start with "Project:" because this prefix is reserved for a parser shortcut.</p>';
+      
+      $template->footer();
+      $db->close();
+      
+      exit;
+    }
     
     $tn = $paths->nslist[$_POST['namespace']] . $urlname;
     if ( isset($paths->pages[$tn]) )
@@ -151,13 +162,13 @@ function page_Special_CreatePage()
     {
       $db->_die('The page entry could not be inserted.');
     }
-    $q = $db->sql_query('INSERT INTO '.table_prefix.'page_text(page_id,namespace,page_text) VALUES(\''.$urlname.'\', \''.$_POST['namespace'].'\', \''.$db->escape('Please edit this page! <nowiki><script type="text/javascript">ajaxEditor();</script></nowiki>').'\');');
+    $q = $db->sql_query('INSERT INTO '.table_prefix.'page_text(page_id,namespace,page_text) VALUES(\''.$urlname.'\', \''.$_POST['namespace'].'\', \''.'\');');
     if ( !$q )
     {
       $db->_die('The page text entry could not be inserted.');
     }
     
-    header('Location: '.makeUrlNS($_POST['namespace'], sanitize_page_id($p)));
+    header('Location: '.makeUrlNS($_POST['namespace'], sanitize_page_id($p)) . '#do:edit');
     exit;
   }
   $template->header();

@@ -3,12 +3,14 @@
 -- ALL NON-SQL LINES, even otherwise blank lines, must start with "--" or they will get sent to MySQL!
 -- Common tasks (version numbers)
 DELETE FROM {{TABLE_PREFIX}}config WHERE config_name='enano_version' OR config_name='enano_beta_version' OR config_name='enano_alpha_version' OR config_name='enano_rc_version';
-INSERT INTO {{TABLE_PREFIX}}config (config_name, config_value) VALUES( 'enano_version', '1.0.2' ),( 'enano_beta_version', '1' );
+INSERT INTO {{TABLE_PREFIX}}config (config_name, config_value) VALUES( 'enano_version', '1.0.2' );
+---BEGIN 1.0.2b1---
+-- This is really optional, but could reduce confusion if regex page groups get truncated for no apparent reason.
+ALTER TABLE {{TABLE_PREFIX}}page_groups MODIFY COLUMN pg_target text DEFAULT NULL;
+---END 1.0.2b1---
 ---BEGIN 1.0.1.1---
--- No changes in this release
 ---END 1.0.1.1---
 ---BEGIN 1.0.1---
--- No changes in this release
 ---END 1.0.1---
 ---BEGIN 1.0---
 -- Fix for obnoxious $_GET issue

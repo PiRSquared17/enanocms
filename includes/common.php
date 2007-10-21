@@ -23,7 +23,7 @@ if(isset($_REQUEST['GLOBALS']))
   exit;
 }
 
-$version = '1.0.2b1';
+$version = '1.0.2';
 
 function microtime_float()
 {
@@ -67,6 +67,9 @@ if(defined('ENANO_DEBUG'))
 
 if ( file_exists( ENANO_ROOT . '/_nightly.php') )
   require(ENANO_ROOT.'/_nightly.php');
+
+// List of scheduled tasks
+$cron_tasks = array();
 
 // Start including files. LOTS of files. Yeah!
 require_once(ENANO_ROOT.'/includes/constants.php');
