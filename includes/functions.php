@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.1.1
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -1208,8 +1208,7 @@ function enano_codename()
       '1.0.1'  => 'Loch Ness',
       '1.0.1.1'=> 'Loch Ness internal bugfix build',
       '1.0.2b1'=> 'Coblynau unstable',
-      '1.0.2'  => 'Coblynau',
-      '1.1.1'  => 'unstable'
+      '1.0.2'  => 'Coblynau'
     );
   $version = enano_version();
   if ( isset($names[$version]) )
@@ -2745,7 +2744,7 @@ function decode_unicode_array($array)
 function sanitize_tag($tag)
 {
   $tag = strtolower($tag);
-  $tag = preg_replace('/[^\w _-]+/', '', $tag);
+  $tag = preg_replace('/[^\w _@\$%\^&-]+/', '', $tag);
   $tag = trim($tag);
   return $tag;
 }
@@ -2797,7 +2796,7 @@ function aggressive_optimize_html($html)
   $strip_tags = implode('|', $strip_tags);
   
   // Strip out the tags and replace with placeholders
-  preg_match_all("#<($strip_tags)(.*?)>(.*?)</($strip_tags)>#is", $html, $matches);
+  preg_match_all("#<($strip_tags)([ ]+.*?)?>(.*?)</($strip_tags)>#is", $html, $matches);
   $seed = md5(microtime() . mt_rand()); // Random value used for placeholders
   for ($i = 0;$i < sizeof($matches[1]); $i++)
   {
@@ -2805,7 +2804,7 @@ function aggressive_optimize_html($html)
   }
   
   // Optimize (but don't obfuscate) Javascript
-  preg_match_all('/<script(.*?)>(.+?)<\/script>/is', $html, $jscript);
+  preg_match_all('/<script([ ]+.*?)?>(.*?)(\]\]>)?<\/script>/is', $html, $jscript);
   
   // list of Javascript reserved words - from about.com
   $reserved_words = array('abstract', 'as', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'continue', 'const', 'debugger', 'default', 'delete', 'do',
@@ -2819,6 +2818,8 @@ function aggressive_optimize_html($html)
   for ( $i = 0; $i < count($jscript[0]); $i++ )
   {
     $js =& $jscript[2][$i];
+    
+    // echo('<pre>' . "-----------------------------------------------------------------------------\n" . htmlspecialchars($js) . '</pre>');
     
     // for line optimization, explode it
     $particles = explode("\n", $js);
@@ -3165,6 +3166,20 @@ function password_score($password, &$debug = false)
   }
   
   return $score;
+}
+
+/**
+ * Registers a task that will be run every X hours. Scheduled tasks should always be scheduled at runtime - they are not stored in the DB.
+ * @param string Function name to call, or array(object, string method)
+ * @param int Interval between runs, in hours. Defaults to 24.
+ */
+
+function register_cron_task($func, $hour_interval = 24)
+{
+  global $cron_tasks;
+  if ( !isset($cron_tasks[$hour_interval]) )
+    $cron_tasks[$hour_interval] = array();
+  $cron_tasks[$hour_interval][] = $func;
 }
 
 //die('<pre>Original:  01010101010100101010100101010101011010'."\nProcessed: ".uncompress_bitfield(compress_bitfield('01010101010100101010100101010101011010')).'</pre>');

@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.1.1
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -783,7 +783,13 @@ class template {
     dc_here('template: generating and sending the page header');
     if(!defined('ENANO_HEADERS_SENT'))
       define('ENANO_HEADERS_SENT', '');
-    if(!$this->no_headers) echo ( $simple ) ? $this->process_template('simple-header.tpl') : $this->process_template('header.tpl');
+    if ( !$this->no_headers )
+    {
+      $header = ( $simple ) ?
+        $this->process_template('simple-header.tpl') :
+        $this->process_template('header.tpl');
+      echo $header;
+    }
     if ( !$simple && $session->user_logged_in && $session->unread_pms > 0 )
     {
       echo $this->notify_unread_pms();
@@ -952,6 +958,7 @@ class template {
   
   function compile_tpl_code($text)
   {
+    global $db, $session, $paths, $template, $plugins; // Common objects
     // A random seed used to salt tags
     $seed = md5 ( microtime() . mt_rand() );
     
@@ -980,29 +987,88 @@ class template {
     // Conditionals
     //
     
-    // If-else-end
-    $text = preg_replace('/<!-- BEGIN ([A-z0-9_-]+?) -->(.*?)<!-- BEGINELSE \\1 -->(.*?)<!-- END \\1 -->/is', '\'; if ( $this->tpl_bool[\'\\1\'] ) { echo \'\\2\'; } else { echo \'\\3\'; } echo \'', $text);
+    $keywords = array('BEGIN', 'BEGINNOT', 'IFSET', 'IFPLUGIN');
+    $code = $plugins->setHook('template_compile_logic_keyword');
+    foreach ( $code as $cmd )
+    {
+      eval($cmd);
+    }
     
-    // If-end
-    $text = preg_replace('/<!-- BEGIN ([A-z0-9_-]+?) -->(.*?)<!-- END \\1 -->/is', '\'; if ( $this->tpl_bool[\'\\1\'] ) { echo \'\\2\'; } echo \'', $text);
+    $keywords = implode('|', $keywords);
     
-    // If not-else-end
-    $text = preg_replace('/<!-- BEGINNOT ([A-z0-9_-]+?) -->(.*?)<!-- BEGINELSE \\1 -->(.*?)<!-- END \\1 -->/is', '\'; if ( !$this->tpl_bool[\'\\1\'] ) { echo \'\\2\'; } else { echo \'\\3\'; } echo \'', $text);
+    // Matches
+    //          1     2                               3                 4   56                       7     8
+    $regexp = '/(<!-- ('. $keywords .') ([A-z0-9_-]+) -->)(.*)((<!-- BEGINELSE \\3 -->)(.*))?(<!-- END \\3 -->)/isU';
     
-    // If not-end
-    $text = preg_replace('/<!-- BEGINNOT ([A-z0-9_-]+?) -->(.*?)<!-- END \\1 -->/is', '\'; if ( !$this->tpl_bool[\'\\1\'] ) { echo \'\\2\'; } echo \'', $text);
+    /*
+    The way this works is: match all blocks using the standard form with a different keyword in the block each time,
+    and replace them with appropriate PHP logic. Plugin-extensible now. :-)
     
-    // If set-else-end
-    $text = preg_replace('/<!-- IFSET ([A-z0-9_-]+?) -->(.*?)<!-- BEGINELSE \\1 -->(.*?)<!-- END \\1 -->/is', '\'; if ( isset($this->tpl_strings[\'\\1\']) ) { echo \'\\2\'; } else { echo \'\\3\'; } echo \'', $text);
+    The while-loop is to bypass what is apparently a PCRE bug. It's hackish but it works. Properly written plugins should only need
+    to compile templates (using this method) once for each time the template file is changed.
+    */
+    while ( preg_match($regexp, $text) )
+    {
+      preg_match_all($regexp, $text, $matches);
+      for ( $i = 0; $i < count($matches[0]); $i++ )
+      {
+        $start_tag =& $matches[1][$i];
+        $type =& $matches[2][$i];
+        $test =& $matches[3][$i];
+        $particle_true  =& $matches[4][$i];
+        $else_tag =& $matches[6][$i];
+        $particle_else =& $matches[7][$i];
+        $end_tag =& $matches[8][$i];
+        
+        switch($type)
+        {
+          case 'BEGIN':
+            $cond = "isset(\$this->tpl_bool['$test']) && \$this->tpl_bool['$test']";
+            break;
+          case 'BEGINNOT':
+            $cond = "!isset(\$this->tpl_bool['$test']) || ( isset(\$this->tpl_bool['$test']) && !\$this->tpl_bool['$test'] )";
+            break;
+          case 'IFPLUGIN':
+            $cond = "getConfig('plugin_$test') == '1'";
+            break;
+          case 'IFSET':
+            $cond = "isset(\$this->tpl_strings['$test'])";
+            break;
+          default:
+            $code = $plugins->setHook('template_compile_logic_cond');
+            foreach ( $code as $cmd )
+            {
+              eval($cmd);
+            }
+            break;
+        }
+        
+        if ( !isset($cond) || ( isset($cond) && !is_string($cond) ) )
+          continue;
+        
+        $tag_complete = <<<TPLCODE
+        ';
+        /* START OF CONDITION: $type ($test) */
+        if ( $cond )
+        {
+          echo '$particle_true';
+        /* ELSE OF CONDITION: $type ($test) */
+        }
+        else
+        {
+          echo '$particle_else';
+        /* END OF CONDITION: $type ($test) */
+        }
+        echo '
+TPLCODE;
+        
+        $text = str_replace_once($matches[0][$i], $tag_complete, $text);
+        
+      }
+    }
     
-    // If set-end
-    $text = preg_replace('/<!-- IFSET ([A-z0-9_-]+?) -->(.*?)<!-- END \\1 -->/is', '\'; if ( isset($this->tpl_strings[\'\\1\']) ) { echo \'\\2\'; } echo \'', $text);
-    
-    // If plugin loaded-else-end
-    $text = preg_replace('/<!-- IFPLUGIN ([A-z0-9_\.-]+?) -->(.*?)<!-- BEGINELSE \\1 -->(.*?)<!-- END \\1 -->/is', '\'; if ( getConfig(\'plugin_\\1\') == \'1\' ) { echo \'\\2\'; } else { echo \'\\3\'; } echo \'', $text);
-    
-    // If plugin loaded-end
-    $text = preg_replace('/<!-- IFPLUGIN ([A-z0-9_\.-]+?) -->(.*?)<!-- END \\1 -->/is', '\'; if ( getConfig(\'plugin_\\1\') == \'1\' ) { echo \'\\2\'; } echo \'', $text);
+    // For debugging ;-)
+    // die("<pre>&lt;?php\n" . htmlspecialchars($text."\n\n".print_r($matches,true)) . "\n\n?&gt;</pre>");
     
     //
     // Data substitution/variables
@@ -1022,6 +1088,8 @@ class template {
       $tag = "{PHP:$i:$seed}";
       $text = str_replace_once($tag, "'; $match echo '", $text);
     }
+    
+    // echo('<pre>' . htmlspecialchars($text) . '</pre>');
     
     return $text;  
     
@@ -1405,7 +1473,7 @@ EOF;
   function username_field($name, $value = false)
   {
     $randomid = md5( time() . microtime() . mt_rand() );
-    $text = '<input name="'.$name.'" onkeyup="ajaxUserNameComplete(this)" autocomplete="off" type="text" size="30" id="userfield_'.$randomid.'"';
+    $text = '<input name="'.$name.'" onkeyup="new AutofillUsername(this);" autocomplete="off" type="text" size="30" id="userfield_'.$randomid.'"';
     if($value) $text .= ' value="'.$value.'"';
     $text .= ' />';
     return $text;

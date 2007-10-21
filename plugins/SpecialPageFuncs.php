@@ -4,13 +4,13 @@ Plugin Name: Special page-related pages
 Plugin URI: http://enanocms.org/
 Description: Provides the page Special:CreatePage, which can be used to create new pages. Also adds the About Enano and GNU General Public License pages.
 Author: Dan Fuhry
-Version: 1.0.1
+Version: 1.0.2
 Author URI: http://enanocms.org/
 */
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0 release candidate 2
+ * Version 1.0.2
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -103,6 +103,17 @@ function page_Special_CreatePage()
       $template->header();
       
       echo '<h3>The page could not be created.</h3><p>The name "'.$paths->nslist[$namespace].$p.'" is invalid.</p>';
+      
+      $template->footer();
+      $db->close();
+      
+      exit;
+    }
+    if ( substr($urlname, 0, 8) == 'Project:' )
+    {
+      $template->header();
+      
+      echo '<h3>The page could not be created.</h3><p>The page title can\'t start with "Project:" because this prefix is reserved for a parser shortcut.</p>';
       
       $template->footer();
       $db->close();
