@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.1.1
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  * install.php - handles everything related to installation and initial configuration
  *
@@ -14,7 +14,8 @@
  */
  
 @include('config.php');
-if( ( defined('ENANO_INSTALLED') || defined('MIDGET_INSTALLED') ) && ((isset($_GET['mode']) && ($_GET['mode']!='finish' && $_GET['mode']!='css')) || !isset($_GET['mode']))) {
+if( ( defined('ENANO_INSTALLED') || defined('MIDGET_INSTALLED') ) && ((isset($_GET['mode']) && ($_GET['mode']!='finish' && $_GET['mode']!='css')) || !isset($_GET['mode'])))
+{
   $_GET['title'] = 'Enano:Installation_locked';
   require('includes/common.php');
   die_friendly('Installation locked', '<p>The Enano installer has found a Enano installation in this directory. You MUST delete config.php if you want to re-install Enano.</p><p>If you wish to upgrade an older Enano installation to this version, please use the <a href="upgrade.php">upgrade script</a>.</p>');
@@ -23,7 +24,7 @@ if( ( defined('ENANO_INSTALLED') || defined('MIDGET_INSTALLED') ) && ((isset($_G
 
 define('IN_ENANO_INSTALL', 'true');
 
-define('ENANO_VERSION', '1.1.1');
+define('ENANO_VERSION', '1.0.2');
 // In beta versions, define ENANO_BETA_VERSION here
 
 if(!defined('scriptPath')) {
@@ -260,7 +261,7 @@ EOF;
 }
 
 $template = new template_nodb();
-$template->load_theme('stpatty', 'shamrock', false);
+$template->load_theme('oxygen', 'bleu', false);
 
 $modestrings = Array(
               'welcome' => 'Welcome',
@@ -313,9 +314,10 @@ switch($_GET['mode'])
   case 'welcome':
     ?>
     <div style="text-align: center; margin-top: 10px;">
-      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-green.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
+      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-blue.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
       <h2>Welcome to Enano</h2>
-      <h3>version 1.1.1 &ndash; unstable</h3>
+      <h3>version 1.0.2 &ndash; stable<br />
+      <span style="font-weight: normal;">also affectionately known as "coblynau" <tt>:)</tt></span></h3>
       <?php
       if ( file_exists('./_nightly.php') )
       {

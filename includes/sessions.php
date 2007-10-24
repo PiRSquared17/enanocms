@@ -547,55 +547,14 @@ class sessionManager {
    * @param string $aes_key The MD5 hash of the encryption key, hex-encoded
    * @param string $challenge The 256-bit MD5 challenge string - first 128 bits should be the hash, the last 128 should be the challenge salt
    * @param int $level The privilege level we're authenticating for, defaults to 0
-   * @param array $captcha_hash Optional. If we're locked out and the lockout policy is captcha, this should be the identifier for the code.
-   * @param array $captcha_code Optional. If we're locked out and the lockout policy is captcha, this should be the code the user entered.
    * @return string 'success' on success, or error string on failure
    */
    
-  function login_with_crypto($username, $aes_data, $aes_key, $challenge, $level = USER_LEVEL_MEMBER, $captcha_hash = false, $captcha_code = false)
+  function login_with_crypto($username, $aes_data, $aes_key, $challenge, $level = USER_LEVEL_MEMBER)
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
     
     $privcache = $this->private_key;
-
-    if ( !defined('IN_ENANO_INSTALL') )
-    {
-      // Lockout stuff
-      $threshold = ( $_ = getConfig('lockout_threshold') ) ? intval($_) : 5;
-      $duration  = ( $_ = getConfig('lockout_duration') ) ? intval($_) : 15;
-      // convert to minutes
-      $duration  = $duration * 60;
-      $policy = ( $x = getConfig('lockout_policy') && in_array(getConfig('lockout_policy'), array('lockout', 'disable', 'captcha')) ) ? getConfig('lockout_policy') : 'lockout';
-      if ( $policy == 'captcha' && $captcha_hash && $captcha_code )
-      {
-        // policy is captcha -- check if it's correct, and if so, bypass lockout check
-        $real_code = $this->get_captcha($captcha_hash);
-      }
-      if ( $policy != 'disable' && !( $policy == 'captcha' && isset($real_code) && $real_code == $captcha_code ) )
-      {
-        $ipaddr = $db->escape($_SERVER['REMOTE_ADDR']);
-        $timestamp_cutoff = time() - $duration;
-        $q = $this->sql('SELECT timestamp FROM '.table_prefix.'lockout WHERE timestamp > ' . $timestamp_cutoff . ' AND ipaddr = \'' . $ipaddr . '\' ORDER BY timestamp DESC;');
-        $fails = $db->numrows();
-        if ( $fails >= $threshold )
-        {
-          // ooh boy, somebody's in trouble ;-)
-          $row = $db->fetchrow();
-          $db->free_result();
-          return array(
-              'success' => false,
-              'error' => 'locked_out',
-              'lockout_threshold' => $threshold,
-              'lockout_duration' => ( $duration / 60 ),
-              'lockout_fails' => $fails,
-              'lockout_policy' => $policy,
-              'time_rem' => ( $duration / 60 ) - round( ( time() - $row['timestamp'] ) / 60 ),
-              'lockout_last_time' => $row['timestamp']
-            );
-        }
-        $db->free_result();
-      }
-    }
     
     // Instanciate the Rijndael encryption object
     $aes = new AESCrypt(AES_BITS, AES_BLOCKSIZE);
@@ -604,19 +563,13 @@ class sessionManager {
     
     $aes_key = $this->fetch_public_key($aes_key);
     if(!$aes_key)
-      return array(
-        'success' => false,
-        'error' => 'key_not_found'
-        );
+      return 'Couldn\'t look up public key "'.$aes_key.'" for decryption';
     
     // Convert the key to a binary string
     $bin_key = hexdecode($aes_key);
     
     if(strlen($bin_key) != AES_BITS / 8)
-      return array(
-        'success' => false,
-        'error' => 'key_wrong_length'
-        );
+      return 'The decryption key is the wrong length';
     
     // Decrypt our password
     $password = $aes->decrypt($aes_data, $bin_key, ENC_HEX);
@@ -637,29 +590,7 @@ class sessionManager {
         $this->sql('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary,page_text) VALUES(\'security\', \'admin_auth_bad\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\', ' . intval($level) . ')');
       else
         $this->sql('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary) VALUES(\'security\', \'auth_bad\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\')');
-    
-      if ( $policy != 'disable' && !defined('IN_ENANO_INSTALL') )
-      {
-        $ipaddr = $db->escape($_SERVER['REMOTE_ADDR']);
-        // increment fail count
-        $this->sql('INSERT INTO '.table_prefix.'lockout(ipaddr, timestamp, action) VALUES(\'' . $ipaddr . '\', UNIX_TIMESTAMP(), \'credential\');');
-        $fails++;
-        // ooh boy, somebody's in trouble ;-)
-        return array(
-            'success' => false,
-            'error' => ( $fails >= $threshold ) ? 'locked_out' : 'invalid_credentials',
-            'lockout_threshold' => $threshold,
-            'lockout_duration' => ( $duration / 60 ),
-            'lockout_fails' => $fails,
-            'time_rem' => ( $duration / 60 ),
-            'lockout_policy' => $policy
-          );
-      }
-      
-      return array(
-          'success' => false,
-          'error' => 'invalid_credentials'
-        );
+      return "The username and/or password is incorrect.";  
     }
     $row = $db->fetchrow();
     
@@ -710,10 +641,7 @@ class sessionManager {
     if($success)
     {
       if($level > $row['user_level'])
-        return array(
-          'success' => false,
-          'error' => 'too_big_for_britches'
-        );
+        return 'You are not authorized for this level of access.';
       
       $sess = $this->register_session(intval($row['user_id']), $username, $password, $level);
       if($sess)
@@ -733,15 +661,10 @@ class sessionManager {
         {
           eval($cmd);
         }
-        return array(
-          'success' => true
-        );
+        return 'success';
       }
       else
-        return array(
-          'success' => false,
-          'error' => 'backend_fail'
-        );
+        return 'Your login credentials were correct, but an internal error occurred while registering the session key in the database.';
     }
     else
     {
@@ -750,28 +673,7 @@ class sessionManager {
       else
         $this->sql('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary) VALUES(\'security\', \'auth_bad\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\')');
         
-      // Do we also need to increment the lockout countdown?
-      if ( $policy != 'disable' && !defined('IN_ENANO_INSTALL') )
-      {
-        $ipaddr = $db->escape($_SERVER['REMOTE_ADDR']);
-        // increment fail count
-        $this->sql('INSERT INTO '.table_prefix.'lockout(ipaddr, timestamp, action) VALUES(\'' . $ipaddr . '\', UNIX_TIMESTAMP(), \'credential\');');
-        $fails++;
-        return array(
-            'success' => false,
-            'error' => ( $fails >= $threshold ) ? 'locked_out' : 'invalid_credentials',
-            'lockout_threshold' => $threshold,
-            'lockout_duration' => ( $duration / 60 ),
-            'lockout_fails' => $fails,
-            'time_rem' => ( $duration / 60 ),
-            'lockout_policy' => $policy
-          );
-      }
-        
-      return array(
-        'success' => false,
-        'error' => 'invalid_credentials'
-      );
+      return 'The username and/or password is incorrect.';
     }
   }
   
@@ -797,45 +699,6 @@ class sessionManager {
       return $this->login_compat($username, $pass_hashed, $level);
     }
     
-    if ( !defined('IN_ENANO_INSTALL') )
-    {
-      // Lockout stuff
-      $threshold = ( $_ = getConfig('lockout_threshold') ) ? intval($_) : 5;
-      $duration  = ( $_ = getConfig('lockout_duration') ) ? intval($_) : 15;
-      // convert to minutes
-      $duration  = $duration * 60;
-      $policy = ( $x = getConfig('lockout_policy') && in_array(getConfig('lockout_policy'), array('lockout', 'disable', 'captcha')) ) ? getConfig('lockout_policy') : 'lockout';
-      if ( $policy == 'captcha' && $captcha_hash && $captcha_code )
-      {
-        // policy is captcha -- check if it's correct, and if so, bypass lockout check
-        $real_code = $this->get_captcha($captcha_hash);
-      }
-      if ( $policy != 'disable' && !( $policy == 'captcha' && isset($real_code) && $real_code == $captcha_code ) )
-      {
-        $ipaddr = $db->escape($_SERVER['REMOTE_ADDR']);
-        $timestamp_cutoff = time() - $duration;
-        $q = $this->sql('SELECT timestamp FROM '.table_prefix.'lockout WHERE timestamp > ' . $timestamp_cutoff . ' AND ipaddr = \'' . $ipaddr . '\' ORDER BY timestamp DESC;');
-        $fails = $db->numrows();
-        if ( $fails > $threshold )
-        {
-          // ooh boy, somebody's in trouble ;-)
-          $row = $db->fetchrow();
-          $db->free_result();
-          return array(
-              'success' => false,
-              'error' => 'locked_out',
-              'lockout_threshold' => $threshold,
-              'lockout_duration' => ( $duration / 60 ),
-              'lockout_fails' => $fails,
-              'lockout_policy' => $policy,
-              'time_rem' => $duration - round( ( time() - $row['timestamp'] ) / 60 ),
-              'lockout_last_time' => $row['timestamp']
-            );
-        }
-        $db->free_result();
-      }
-    }
-    
     // Instanciate the Rijndael encryption object
     $aes = new AESCrypt(AES_BITS, AES_BLOCKSIZE);
     
@@ -844,35 +707,14 @@ class sessionManager {
     
     // Retrieve the real password from the database
     $this->sql('SELECT password,old_encryption,user_id,user_level,temp_password,temp_password_time FROM '.table_prefix.'users WHERE lcase(username)=\''.$this->prepare_text(strtolower($username)).'\';');
-    if($db->numrows() < 1)
+    if ( $db->numrows() < 1 )
     {
       // This wasn't logged in <1.0.2, dunno how it slipped through
       if($level > USER_LEVEL_MEMBER)
         $this->sql('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary,page_text) VALUES(\'security\', \'admin_auth_bad\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\', ' . intval($level) . ')');
       else
         $this->sql('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary) VALUES(\'security\', \'auth_bad\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\')');
-      
-      // Do we also need to increment the lockout countdown?
-      if ( $policy != 'disable' && !defined('IN_ENANO_INSTALL') )
-      {
-        $ipaddr = $db->escape($_SERVER['REMOTE_ADDR']);
-        // increment fail count
-        $this->sql('INSERT INTO '.table_prefix.'lockout(ipaddr, timestamp, action) VALUES(\'' . $ipaddr . '\', UNIX_TIMESTAMP(), \'credential\');');
-        $fails++;
-        return array(
-            'success' => false,
-            'error' => ( $fails >= $threshold ) ? 'locked_out' : 'invalid_credentials',
-            'lockout_threshold' => $threshold,
-            'lockout_duration' => ( $duration / 60 ),
-            'lockout_fails' => $fails,
-            'lockout_policy' => $policy
-          );
-      }
-      
-      return array(
-        'success' => false,
-        'error' => 'invalid_credentials'
-      );
+      return "The username and/or password is incorrect.";  
     }
     $row = $db->fetchrow();
     
@@ -922,10 +764,7 @@ class sessionManager {
     if($success)
     {
       if((int)$level > (int)$row['user_level'])
-        return array(
-          'success' => false,
-          'error' => 'too_big_for_britches'
-        );
+        return 'You are not authorized for this level of access.';
       $sess = $this->register_session(intval($row['user_id']), $username, $real_pass, $level);
       if($sess)
       {
@@ -940,15 +779,10 @@ class sessionManager {
           eval($cmd);
         }
         
-        return array(
-          'success' => true
-          );
+        return 'success';
       }
       else
-        return array(
-          'success' => false,
-          'error' => 'backend_fail'
-        );
+        return 'Your login credentials were correct, but an internal error occured while registering the session key in the database.';
     }
     else
     {
@@ -957,27 +791,7 @@ class sessionManager {
       else
         $this->sql('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary) VALUES(\'security\', \'auth_bad\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\')');
         
-      // Do we also need to increment the lockout countdown?
-      if ( $policy != 'disable' && !defined('IN_ENANO_INSTALL') )
-      {
-        $ipaddr = $db->escape($_SERVER['REMOTE_ADDR']);
-        // increment fail count
-        $this->sql('INSERT INTO '.table_prefix.'lockout(ipaddr, timestamp, action) VALUES(\'' . $ipaddr . '\', UNIX_TIMESTAMP(), \'credential\');');
-        $fails++;
-        return array(
-            'success' => false,
-            'error' => ( $fails >= $threshold ) ? 'locked_out' : 'invalid_credentials',
-            'lockout_threshold' => $threshold,
-            'lockout_duration' => ( $duration / 60 ),
-            'lockout_fails' => $fails,
-            'lockout_policy' => $policy
-          );
-      }
-        
-      return array(
-        'success' => false,
-        'error' => 'invalid_credentials'
-      );
+      return 'The username and/or password is incorrect.';
     }
   }
   
@@ -1049,7 +863,7 @@ class sessionManager {
     {
       // Stash it in a cookie
       // For now, make the cookie last forever, we can change this in 1.1.x
-      setcookie( 'sid', $session_key, time()+315360000, scriptPath.'/' );
+      setcookie( 'sid', $session_key, time()+315360000, scriptPath.'/', null, ( isset($_SERVER['HTTPS']) ) );
       $_COOKIE['sid'] = $session_key;
     }
     // $keyhash is stored in the database, this is for compatibility with the older DB structure

@@ -4,13 +4,13 @@ Plugin Name: Runt - the Enano administration panel
 Plugin URI: http://enanocms.org/
 Description: Provides the page Special:Administration, which is the AJAX frontend to the various Admin pagelets. This plugin cannot be disabled.
 Author: Dan Fuhry
-Version: 1.0.1
+Version: 1.0.2
 Author URI: http://enanocms.org/
 */
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.1.1
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -203,16 +203,6 @@ function page_Admin_GeneralConfig() {
       setConfig('pw_strength_minimum', $strength);
     }
     
-    // Account lockout policy
-    if ( preg_match('/^[0-9]+$/', $_POST['lockout_threshold']) )
-      setConfig('lockout_threshold', $_POST['lockout_threshold']);
-    
-    if ( preg_match('/^[0-9]+$/', $_POST['lockout_duration']) )
-      setConfig('lockout_duration', $_POST['lockout_duration']);
-    
-    if ( in_array($_POST['lockout_policy'], array('disable', 'captcha', 'lockout')) )
-      setConfig('lockout_policy', $_POST['lockout_policy']);
-    
     echo '<div class="info-box">Your changes to the site configuration have been saved.</div><br />';
     
   }
@@ -360,43 +350,6 @@ function page_Admin_GeneralConfig() {
           ?>
         </td>
       </tr>
-      
-    <!-- Account lockout -->
-    
-      <tr><th colspan="2">Account lockouts</th></tr>
-      
-      <tr><td class="row3" colspan="2">Configure Enano to prevent or restrict logins for a specified period of time if a user enters an incorrect password a specific number of times.</td></tr>
-      
-      <tr>
-        <td class="row2">Lockout threshold:<br />
-          <small>How many times can a user enter wrong credentials before a lockout goes into effect?</small>
-        </td>
-        <td class="row2">
-          <input type="text" name="lockout_threshold" value="<?php echo ( $_ = getConfig('lockout_threshold') ) ? $_ : '5' ?>" />
-        </td>
-      </tr>
-      
-      <tr>
-        <td class="row1">Lockout duration:<br />
-          <small>This is how long an account lockout should last, in minutes.</small>
-        </td>
-        <td class="row1">
-          <input type="text" name="lockout_duration" value="<?php echo ( $_ = getConfig('lockout_duration') ) ? $_ : '15' ?>" />
-        </td>
-      </tr>
-      
-      <tr>
-        <td class="row2">Lockout policy:<br />
-          <small>What should be done when a lockout goes into effect?</small>
-        </td>
-        <td class="row2">
-          <label><input type="radio" name="lockout_policy" value="disable" <?php if ( getConfig('lockout_policy') == 'disable' ) echo 'checked="checked"'; ?> /> Don't do anything</label><br />
-          <label><input type="radio" name="lockout_policy" value="captcha" <?php if ( getConfig('lockout_policy') == 'captcha' ) echo 'checked="checked"'; ?> /> Require visual confirmation</label><br />
-          <label><input type="radio" name="lockout_policy" value="lockout" <?php if ( getConfig('lockout_policy') == 'lockout' || !getConfig('lockout_policy') ) echo 'checked="checked"'; ?> /> Prevent all login attempts</label>
-        </td>
-      </tr>
-      
-    <!-- Password strength -->
       
       <tr><th colspan="2">Password strength</th></tr>
       
@@ -2732,7 +2685,7 @@ function page_Special_Administration()
           } 
           else 
           {
-            echo '<script type="text/javascript">document.write(\'<div class="wait-box">Please wait while the administration panel loads. You need to be using a recent browser with AJAX support in order to use Runt.</div>\');</script><noscript><div class="error-box">It looks like Javascript isn\'t enabled in your browser. Please enable Javascript or use a different browser to continue.</div></noscript>';
+            echo '<div class="wait-box">Please wait while the administration panel loads. You need to be using a recent browser with AJAX support in order to use Runt.</div>';
           }
           ?>
           </div>
@@ -3026,7 +2979,7 @@ function page_Special_EditSidebar()
             echo '<div class="warning-box" style="margin: 10px 0;">$_GET[\'side\'] contained an SQL injection attempt</div>';
             break;
           }
-          $query = $db->sql_query('UPDATE '.table_prefix.'sidebar SET sidebar_id=' . $db->escape($_GET['side']) . ' WHERE item_id=' . $db->escape($_GET['id']) . ';');
+          $query = $db->sql_query('UPDATE '.table_prefix.'sidebar SET sidebar_id=' . $db->escape($_GET['side']) . ' WHERE item_id=' . intval($_GET['id']) . ';');
           if(!$query)
           {
             echo $db->get_error();
@@ -3036,7 +2989,7 @@ function page_Special_EditSidebar()
           echo '<div class="info-box" style="margin: 10px 0;">Item moved.</div>';
           break;
         case 'delete':
-          $query = $db->sql_query('DELETE FROM '.table_prefix.'sidebar WHERE item_id=' . $db->escape($_GET['id']) . ';'); // Already checked for injection attempts ;-)
+          $query = $db->sql_query('DELETE FROM '.table_prefix.'sidebar WHERE item_id=' . intval($_GET['id']) . ';'); // Already checked for injection attempts ;-)
           if(!$query)
           {
             echo $db->get_error();
@@ -3051,7 +3004,7 @@ function page_Special_EditSidebar()
           echo '<div class="error-box" style="margin: 10px 0;">Item deleted.</div>';
           break;
         case 'disenable';
-          $q = $db->sql_query('SELECT item_enabled FROM '.table_prefix.'sidebar WHERE item_id=' . $db->escape($_GET['id']) . ';');
+          $q = $db->sql_query('SELECT item_enabled FROM '.table_prefix.'sidebar WHERE item_id=' . intval($_GET['id']) . ';');
           if(!$q)
           {
             echo $db->get_error();
@@ -3061,7 +3014,22 @@ function page_Special_EditSidebar()
           $r = $db->fetchrow();
           $db->free_result();
           $e = ( $r['item_enabled'] == 1 ) ? '0' : '1';
-          $q = $db->sql_query('UPDATE '.table_prefix.'sidebar SET item_enabled='.$e.' WHERE item_id=' . $db->escape($_GET['id']) . ';');
+          $q = $db->sql_query('UPDATE '.table_prefix.'sidebar SET item_enabled='.$e.' WHERE item_id=' . intval($_GET['id']) . ';');
+          if(!$q)
+          {
+            echo $db->get_error();
+            $template->footer();
+            exit;
+          }
+          if(isset($_GET['ajax']))
+          {
+            ob_end_clean();
+            die('GOOD');
+          }
+          break;
+        case 'rename';
+          $newname = $db->escape($_POST['newname']);
+          $q = $db->sql_query('UPDATE '.table_prefix.'sidebar SET block_name=\''.$newname.'\' WHERE item_id=' . intval($_GET['id']) . ';');
           if(!$q)
           {
             echo $db->get_error();
@@ -3075,7 +3043,7 @@ function page_Special_EditSidebar()
           }
           break;
         case 'getsource':
-          $q = $db->sql_query('SELECT block_content,block_type FROM '.table_prefix.'sidebar WHERE item_id=' . $db->escape($_GET['id']) . ';');
+          $q = $db->sql_query('SELECT block_content,block_type FROM '.table_prefix.'sidebar WHERE item_id=' . intval($_GET['id']) . ';');
           if(!$q)
           {
             echo $db->get_error();
@@ -3091,7 +3059,7 @@ function page_Special_EditSidebar()
         case 'save':
           if ( defined('ENANO_DEMO_MODE') )
           {
-            $q = $db->sql_query('SELECT block_type FROM '.table_prefix.'sidebar WHERE item_id=' . $db->escape($_GET['id']) . ';');
+            $q = $db->sql_query('SELECT block_type FROM '.table_prefix.'sidebar WHERE item_id=' . intval($_GET['id']) . ';');
             if(!$q)
             {
               echo 'var status=unescape(\''.hexencode($db->get_error()).'\');';
@@ -3107,13 +3075,13 @@ function page_Special_EditSidebar()
               $_POST['content'] = sanitize_html($_POST['content'], true);
             }
           }
-          $q = $db->sql_query('UPDATE '.table_prefix.'sidebar SET block_content=\''.$db->escape(rawurldecode($_POST['content'])).'\' WHERE item_id=' . $db->escape($_GET['id']) . ';');
+          $q = $db->sql_query('UPDATE '.table_prefix.'sidebar SET block_content=\''.$db->escape(rawurldecode($_POST['content'])).'\' WHERE item_id=' . intval($_GET['id']) . ';');
           if(!$q)
           {
             echo 'var status=unescape(\''.hexencode($db->get_error()).'\');';
             exit;
           }
-          $q = $db->sql_query('SELECT block_type,block_content FROM '.table_prefix.'sidebar WHERE item_id=' . $db->escape($_GET['id']) . ';');
+          $q = $db->sql_query('SELECT block_type,block_content FROM '.table_prefix.'sidebar WHERE item_id=' . intval($_GET['id']) . ';');
           if(!$q)
           {
             echo 'var status=unescape(\''.hexencode($db->get_error()).'\');';
@@ -3205,6 +3173,8 @@ function page_Special_EditSidebar()
           $parser = $template->makeParserText($vars['sidebar_section']);
           $c = $template->tplWikiFormat($row['block_content'], false, 'sidebar-editor.tpl');
           $c = preg_replace('#<a (.*?)>(.*?)</a>#is', '<a href="#" onclick="return false;">\\2</a>', $c);
+          // fix for the "Administration" link that somehow didn't get rendered properly
+          $c = preg_replace("/(^|\n)([ ]*)<a([ ]+.*)?>(.+)<\/a>(<br(.*)\/>)([\r\n]+|$)/isU", '\\1\\2<li><a\\3>\\4</a></li>\\7', $c);
           break;
         case BLOCK_HTML:
           $parser = $template->makeParserText($vars['sidebar_section_raw']);
@@ -3224,7 +3194,10 @@ function page_Special_EditSidebar()
           $c = ($template->fetch_block($row['block_content'])) ? $template->fetch_block($row['block_content']) : 'Can\'t find plugin block';
           break;
       }
-      $t = $template->tplWikiFormat($row['block_name']);
+      $block_name = $template->tplWikiFormat($row['block_name']);
+      if ( empty($block_name) )
+        $block_name = '&lt;Unnamed&gt;';
+      $t = '<span title="Double-click to rename this block" id="sbrename_' . $row['item_id'] . '" ondblclick="ajaxRenameSidebarStage1(this, \''.$row['item_id'].'\'); return false;">' . $block_name . '</span>';
       if($row['item_enabled'] == 0) $t .= ' <span id="disabled_'.$row['item_id'].'" style="color: red;">(disabled)</span>';
       else           $t .= ' <span id="disabled_'.$row['item_id'].'" style="color: red; display: none;">(disabled)</span>';
       $side = ( $row['sidebar_id'] == SIDEBAR_LEFT ) ? SIDEBAR_RIGHT : SIDEBAR_LEFT;

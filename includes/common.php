@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.1.1
+ * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -23,7 +23,7 @@ if(isset($_REQUEST['GLOBALS']))
   exit;
 }
 
-$version = '1.1.1';
+$version = '1.0.2';
 
 function microtime_float()
 {
@@ -67,6 +67,9 @@ if(defined('ENANO_DEBUG'))
 
 if ( file_exists( ENANO_ROOT . '/_nightly.php') )
   require(ENANO_ROOT.'/_nightly.php');
+
+// List of scheduled tasks
+$cron_tasks = array();
 
 // Start including files. LOTS of files. Yeah!
 require_once(ENANO_ROOT.'/includes/constants.php');
