@@ -9,6 +9,9 @@ INSERT INTO {{TABLE_PREFIX}}config (config_name, config_value) VALUES( 'enano_ve
 -- UPDATE {{TABLE_PREFIX}}group_members SET group_id=9998 WHERE group_id=4;
 -- INSERT INTO {{TABLE_PREFIX}}groups(group_id,group_name,group_type,system_group) VALUES(4, 'Regular members', 3, 1);
 CREATE TABLE {{TABLE_PREFIX}}lockout( id int(12) NOT NULL auto_increment, ipaddr varchar(40) NOT NULL, action ENUM('credential', 'level') NOT NULL DEFAULT 'credential', timestamp int(12) NOT NULL DEFAULT 0, PRIMARY KEY ( id ) ) CHARACTER SET `utf8`;
+CREATE TABLE {{TABLE_PREFIX}}language( lang_id smallint(5) NOT NULL auto_increment, lang_code varchar(16) NOT NULL, lang_name_default varchar(64) NOT NULL, lang_name_native varchar(64) NOT NULL, last_changed int(12) NOT NULL DEFAULT 0, PRIMARY KEY ( lang_id ) ) CHARACTER SET `utf8`;
+CREATE TABLE {{TABLE_PREFIX}}language_strings( string_id bigint(15) NOT NULL auto_increment, lang_id smallint(5) NOT NULL, string_category varchar(32) NOT NULL, string_name varchar(64) NOT NULL, string_content longtext NOT NULL, PRIMARY KEY ( string_id ) );
+ALTER TABLE {{TABLE_PREFIX}}users ADD COLUMN user_lang smallint(5) NOT NULL;
 ---END Stable1.0ToUnstable1.1---
 ---BEGIN 1.0.2---
 ---END 1.0.2---
@@ -94,6 +97,7 @@ UPDATE {{TABLE_PREFIX}}users SET theme='stpatty',style='shamrock';
 ---END 1.0b4---
 ---BEGIN 1.0b3---
 INSERT INTO {{TABLE_PREFIX}}config(config_name, config_value) VALUES( 'allowed_mime_types', 'cbf:len=168;crc=c3dcad3f;data=0[1],1[4],0[3],1[1],0[2],1[1],0[11],1[1],0[7],1[1],0[9],1[1],0[6],1[3],0[10],1[1],0[2],1[2],0[1],1[1],0[1],1[2],0[6],1[3],0[1],1[1],0[2],1[4],0[1],1[2],0[3],1[1],0[4],1[2],0[26],1[5],0[6],1[2],0[2],1[1],0[4],1[1],0[10],1[2],0[1],1[1],0[6]|end' );
+ALTER TABLE {{TABLE_PREFIX}}privmsgs ADD COLUMN message_read tinyint(1) NOT NULL DEFAULT 0;
 ---END 1.0b3---
 ---BEGIN 1.0b2---
 -- 10/1: Removed alterations to users table, moved to upgrade.php, to allow the session manager to work
