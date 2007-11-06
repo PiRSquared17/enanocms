@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0.2 (Coblynau)
+ * Version 1.1.1
  * Copyright (C) 2006-2007 Dan Fuhry
  * install.php - handles everything related to installation and initial configuration
  *
@@ -24,7 +24,7 @@ if( ( defined('ENANO_INSTALLED') || defined('MIDGET_INSTALLED') ) && ((isset($_G
 
 define('IN_ENANO_INSTALL', 'true');
 
-define('ENANO_VERSION', '1.0.2');
+define('ENANO_VERSION', '1.1.1');
 // In beta versions, define ENANO_BETA_VERSION here
 
 if(!defined('scriptPath')) {
@@ -782,7 +782,7 @@ EOF;
 }
 
 $template = new template_nodb();
-$template->load_theme('oxygen', 'bleu', false);
+$template->load_theme('stpatty', 'shamrock', false);
 
 $modestrings = Array(
               'welcome' => 'Welcome',
@@ -835,10 +835,9 @@ switch($_GET['mode'])
   case 'welcome':
     ?>
     <div style="text-align: center; margin-top: 10px;">
-      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-blue.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
+      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-green.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
       <h2>Welcome to Enano</h2>
-      <h3>version 1.0.2 &ndash; stable<br />
-      <span style="font-weight: normal;">also affectionately known as "coblynau" <tt>:)</tt></span></h3>
+      <h3>version 1.1.1 &ndash; unstable</h3>
       <?php
       if ( file_exists('./_nightly.php') )
       {
@@ -1186,7 +1185,7 @@ switch($_GET['mode'])
     break;
   case "website":
     if(!isset($_POST['_cont'])) {
-      echo 'No POST data signature found. Please <a href="install.php?mode=sysreqs">restart the installation</a>.';
+      echo 'No POST data signature found. Please <a href="install.php?mode=license">restart the installation</a>.';
       $template->footer();
       exit;
     }
@@ -1257,7 +1256,7 @@ switch($_GET['mode'])
     break;
   case "login":
     if(!isset($_POST['_cont'])) {
-      echo 'No POST data signature found. Please <a href="install.php?mode=sysreqs">restart the installation</a>.';
+      echo 'No POST data signature found. Please <a href="install.php?mode=license">restart the installation</a>.';
       $template->footer();
       exit;
     }
@@ -1495,7 +1494,7 @@ switch($_GET['mode'])
        !isset($_POST['urlscheme'])
        )
     {
-      echo 'The installer has detected that one or more required form values is not set. Please <a href="install.php?mode=sysreqs">restart the installation</a>.';
+      echo 'The installer has detected that one or more required form values is not set. Please <a href="install.php?mode=license">restart the installation</a>.';
       $template->footer();
       exit;
     }
