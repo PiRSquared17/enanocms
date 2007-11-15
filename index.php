@@ -1,6 +1,6 @@
 <?php
 
-/**
+/*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
  * Version 1.0.2 (Coblynau)
  * Copyright (C) 2006-2007 Dan Fuhry
