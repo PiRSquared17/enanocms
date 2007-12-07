@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0.2 (Coblynau)
+ * Version 1.1.1
  * Copyright (C) 2006-2007 Dan Fuhry
  * install.php - handles everything related to installation and initial configuration
  *
@@ -24,8 +24,12 @@ if( ( defined('ENANO_INSTALLED') || defined('MIDGET_INSTALLED') ) && ((isset($_G
 
 define('IN_ENANO_INSTALL', 'true');
 
-define('ENANO_VERSION', '1.0.2');
+define('ENANO_VERSION', '1.1.1');
+define('ENANO_CODE_NAME', 'Germination');
 // In beta versions, define ENANO_BETA_VERSION here
+
+// This is required to make installation work right
+define("ENANO_ALLOW_LOAD_NOLANG", 1);
 
 if(!defined('scriptPath')) {
   $sp = dirname($_SERVER['REQUEST_URI']);
@@ -62,13 +66,17 @@ require('includes/wikiformat.php');
 require('includes/constants.php');
 require('includes/rijndael.php');
 require('includes/functions.php');
+require('includes/dbal.php');
+require('includes/lang.php');
+require('includes/json.php');
 
 strip_magic_quotes_gpc();
-$neutral_color = 'C';
 
 //
 // INSTALLER LIBRARY
 //
+
+$neutral_color = 'C';
 
 function run_installer_stage($stage_id, $stage_name, $function, $failure_explanation, $allow_skip = true)
 {
@@ -118,7 +126,7 @@ function run_installer_stage($stage_id, $stage_name, $function, $failure_explana
 
 function start_install_table()
 {
-  echo '<table border="0" cellspacing="0" cellpadding="0">' . "\n";
+  echo '<table border="0" cellspacing="0" cellpadding="0" style="margin-top: 10px;">' . "\n";
   ob_start();
 }
 
@@ -139,6 +147,7 @@ function echo_stage_success($stage_id, $stage_name)
 function echo_stage_failure($stage_id, $stage_name, $failure_explanation, $resume_stack)
 {
   global $neutral_color;
+  global $lang;
   
   $neutral_color = ( $neutral_color == 'A' ) ? 'C' : 'A';
   echo '<tr><td style="width: 500px; background-color: #' . "FF{$neutral_color}{$neutral_color}{$neutral_color}{$neutral_color}" . '; padding: 0 5px;">' . htmlspecialchars($stage_name) . '</td><td style="padding: 0 5px;"><img alt="Failed" src="images/bad.gif" /></td></tr>' . "\n";
@@ -156,11 +165,11 @@ function echo_stage_failure($stage_id, $stage_name, $failure_explanation, $resum
   echo '<form action="install.php?mode=install&amp;stage=' . $stage_id . '" method="post">
           ' . $post_data . '
           <input type="hidden" name="resume_stack" value="' . htmlspecialchars(implode('|', $resume_stack)) . '" />
-          <h3>Enano installation failed.</h3>
+          <h3>' . $lang->get('meta_msg_err_stagefailed_title') . '</h3>
            <p>' . $failure_explanation . '</p>
-           ' . ( !empty($mysql_error) ? "<p>The error returned from MySQL was: $mysql_error</p>" : '' ) . '
-           <p>When you have corrected the error, click the button below to attempt to continue the installation.</p>
-           <p style="text-align: center;"><input type="submit" value="Retry installation" /></p>
+           ' . ( !empty($mysql_error) ? "<p>" . $lang->get('meta_msg_err_stagefailed_mysqlerror') . " $mysql_error</p>" : '' ) . '
+           <p>' . $lang->get('meta_msg_err_stagefailed_body') . '</p>
+           <p style="text-align: center;"><input type="submit" value="' . $lang->get('meta_btn_retry_installation') . '" /></p>
         </form>';
   global $template, $template_bak;
   if ( is_object($template_bak) )
@@ -602,6 +611,16 @@ function stg_start_api_failure()
   return false;
 }
 
+function stg_import_language()
+{
+  global $db, $session, $paths, $template, $plugins; // Common objects
+  
+  $lang_file = ENANO_ROOT . "/language/english/enano.json";
+  install_language("eng", "English", "English", $lang_file);
+  
+  return true;
+}
+
 function stg_init_logs()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
@@ -670,14 +689,14 @@ function run_test($code, $desc, $extended_desc, $warn = false)
   if($val)
   {
     if($cv) $color='CCFFCC'; else $color='AAFFAA';
-    echo "<tr><td style='background-color: #$color; width: 500px;'>$desc</td><td style='padding-left: 10px;'><img alt='Test passed' src='images/good.gif' /></td></tr>";
+    echo "<tr><td style='background-color: #$color; width: 500px; padding: 5px;'>$desc</td><td style='padding-left: 10px;'><img alt='Test passed' src='images/good.gif' /></td></tr>";
   } elseif(!$val && $warn) {
     if($cv) $color='FFFFCC'; else $color='FFFFAA';
-    echo "<tr><td style='background-color: #$color; width: 500px;'>$desc<br /><b>$extended_desc</b></td><td style='padding-left: 10px;'><img alt='Test passed with warning' src='images/unknown.gif' /></td></tr>";
+    echo "<tr><td style='background-color: #$color; width: 500px; padding: 5px;'>$desc<br /><b>$extended_desc</b></td><td style='padding-left: 10px;'><img alt='Test passed with warning' src='images/unknown.gif' /></td></tr>";
     $warned = true;
   } else {
     if($cv) $color='FFCCCC'; else $color='FFAAAA';
-    echo "<tr><td style='background-color: #$color; width: 500px;'>$desc<br /><b>$extended_desc</b></td><td style='padding-left: 10px;'><img alt='Test failed' src='images/bad.gif' /></td></tr>";
+    echo "<tr><td style='background-color: #$color; width: 500px; padding: 5px;'>$desc<br /><b>$extended_desc</b></td><td style='padding-left: 10px;'><img alt='Test failed' src='images/bad.gif' /></td></tr>";
     $failed = true;
   }
 }
@@ -687,43 +706,25 @@ function show_license($fb = false)
 {
   ?>
   <div style="height: 500px; clip: rect(0px,auto,500px,auto); overflow: auto; padding: 10px; border: 1px dashed #456798; margin: 1em;">
-   <h2>GNU General Public License</h2>
-   
-   <h3>Declaration of license usage</h3>
-   <p>Enano is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.</p>
-   <p>This program is distributed in the hope that it will be useful, but <u>without any warranty</u>; without even the implied warranty of <u>merchantability</u> or <u>fitness for a particular purpose</u>. See the GNU General Public License (below) for more details.</p>
-   <p><b>By clicking the button below or otherwise continuing the installation, you indicate your acceptance of this license agreement.</b></p>
-   
-   <h3>Human-readable version</h3>
-   <p>Enano is distributed under certain licensing terms that we believe make it of the greatest possible use to the public. The license we distribute it under, the GNU General Public License, provides certain terms and conditions that, rather than limit your use of Enano, allow you to get the most out of it. If you would like to read the full text, it can be found below. Here is a human-readable version that we think is a little easier to understand.</p>
-   
-   <ul>
-     <li>You may to run Enano for any purpose.</li>
-     <li>You may study how Enano works and adapt it to your needs.</li>
-     <li>You may redistribute copies so you can help your neighbor.</li>
-     <li>You may improve Enano and release your improvements to the public, so that the whole community benefits.</li>
-   </ul>
-   
-   <p>You may exercise the freedoms specified here provided that you comply with the express conditions of this license. The principal conditions are:</p>
-   
-   <ul>
-     <li>You must conspicuously and appropriately publish on each copy distributed an appropriate copyright notice and disclaimer of warranty and keep intact all the notices that refer to this License and to the absence of any warranty; and give any other recipients of Enano a copy of the GNU General Public License along with Enano. Any translation of the GNU General Public License must be accompanied by the GNU General Public License.</li>
-     <li>If you modify your copy or copies of Enano or any portion of it, or develop a program based upon it, you may distribute the resulting work provided you do so under the GNU General Public License. Any translation of the GNU General Public License must be accompanied by the GNU General Public License.</li>
-     <li>If you copy or distribute Enano, you must accompany it with the complete corresponding machine-readable source code or with a written offer, valid for at least three years, to furnish the complete corresponding machine-readable source code.</li>
-   </ul>
-   
-   <p><b>Disclaimer</b>: The above text is not a license. It is simply a handy reference for understanding the Legal Code (the full license) &ndash; it is a human-readable expression of some of its key terms. Think of it as the user-friendly interface to the Legal Code beneath. The above text itself has no legal value, and its contents do not appear in the actual license.<br /><span style="color: #CCC">Text copied from the <a href="http://creativecommons.org/licenses/GPL/2.0/">Creative Commons GPL Deed page</a></span></p>
-   <?php
-   if ( defined('ENANO_BETA_VERSION') )
-   {
-     ?>
-     <h3>Notice for prerelease versions</h3>
-     <p>This version of Enano is designed only for testing and evaluation purposes. <b>It is not yet completely stable, and should not be used on production websites.</b> As with any Enano version, Dan Fuhry and the Enano team cannot be responsible for any damage, physical or otherwise, to any property as a result of the use of Enano. While security is a number one priority, sometimes things slip through.</p>
-     <?php
-   }
-   ?>
-   <h3>Lawyer-readable version</h3>
-   <?php echo wikiFormat(file_get_contents(ENANO_ROOT . '/GPL')); ?>
+  <?php
+    if ( !file_exists('./GPL') || !file_exists('./language/english/install/license-deed.html') )
+    {
+      echo 'Cannot find the license files.';
+    }
+    echo file_get_contents('./language/english/install/license-deed.html');
+    if ( defined('ENANO_BETA_VERSION') || $branch == 'unstable' )
+    {
+      ?>
+      <h3><?php echo $lang->get('license_info_unstable_title'); ?></h3>
+      <p><?php echo $lang->get('license_info_unstable_body'); ?></p>
+      <?php
+    }
+    ?>
+    <h3><?php echo $lang->get('license_section_gpl_heading'); ?></h3>
+    <?php if ( $lang->lang_code != 'eng' ): ?>
+    <p><i><?php echo $lang->get('license_gpl_blurb_inenglish'); ?></i></p>
+    <?php endif; ?>
+    <?php echo wikiFormat(file_get_contents(ENANO_ROOT . '/GPL')); ?>
    <?php
    global $template;
    if ( $fb )
@@ -739,7 +740,10 @@ function show_license($fb = false)
 
 require_once('includes/template.php');
 
-if(!isset($_GET['mode'])) $_GET['mode'] = 'welcome';
+if(!isset($_GET['mode']))
+{
+  $_GET['mode'] = 'welcome';
+}
 switch($_GET['mode'])
 {
   case 'mysql_test':
@@ -819,44 +823,19 @@ switch($_GET['mode'])
     switch($topic)
     {
       case 'admin_embed_php':
-        $title = 'Allow administrators to embed PHP';
-        $content = '<p>This option allows you to control whether anything between the standard &lt;?php and ?&gt; tags will be treated as
-                        PHP code by Enano. If this option is enabled, and members of the Administrators group use these tags, Enano will
-                        execute that code when the page is loaded. There are obvious potential security implications here, which should
-                        be carefully considered before enabling this option.</p>
-                    <p>If you are the only administrator of this site, or if you have a high level of trust for those will be administering
-                       the site with you, you should enable this to allow extreme customization of pages.</p>
-                    <p>Leave this option off if you are at all concerned about security – if your account is compromised and PHP embedding
-                       is enabled, an attacker can run arbitrary code on your server! Enabling this will also allow administrators to
-                       embed Javascript and arbitrary HTML and CSS.</p>
-                    <p>If you don\'t have experience coding in PHP, you can safely disable this option. You may change this at any time
-                       using the ACL editor by selecting the Administrators group and This Entire Website under the scope selection. <!-- , or by
-                       using the "embedded PHP kill switch" in the administration panel. --></p>';
+        $title = $lang->get('pophelp_admin_embed_php_title');
+        $content = $lang->get('pophelp_admin_embed_php_body');
         break;
       case 'url_schemes':
-        $title = 'URL schemes';
-        $content = '<p>The URL scheme allows you to decide how the URLs to your Enano pages will look.</p>
-                    <p>The first option (Standard URLs) works on any web server. You should select it if your server doesn\'t run Apache, or
-                       if you are at all unsure of your server\'s configuration. With this scheme, URLs at your site will look like <tt>
-                       http://yoursite.com/path-to-enano/index.php/Main_Page</tt>.</p>
-                    <p>The second option, Small URLs, will be selected by default if Enano detects Apache. Small URLs are more friendly towards
-                       search engines, but they don\'t work on very many non-Apache servers, or if PHP is set up through CGI on your server. Many
-                       free and low-cost web hosts will configure PHP through CGI in order to keep your user account as the owner of any files that
-                       Enano generates. With this scheme, URLs at your site will look like <tt>http://yoursite.com/path-to-enano/index.php/Main_Page</tt>.
-                       </p>
-                    <p>The last option, Tiny URLs, is the most friendly URL scheme for search engines, because your URLs won\'t have any special characters
-                       at all in them. However, this only works if your webhost has configured Apache with support for mod_rewrite. Most of the time if your
-                       host supports this you will see a listing for it in their feature matrix. None of the popular Linux distributions (such as Ubuntu,
-                       Debian, Red Hat Enterprise Linux&trade;, Fedora, openSUSE&trade;, or CentOS) come with mod_rewrite enabled, so if you run a
-                       home-brew server, you should consult your distribution\'s documentation for enabling mod_rewrite before selecting this option.
-                       With this scheme, URLs at your site will look like <tt>http://yoursite.com/path-to-enano/Main_Page</tt>.</p>
-                       </p>';
+        $title = $lang->get('pophelp_url_schemes_title');
+        $content = $lang->get('pophelp_url_schemes_body');
         break;
       default:
         $title = 'Invalid topic';
         $content = 'Invalid help topic.';
         break;
     }
+    $close_window = $lang->get('pophelp_btn_close_window');
     echo <<<EOF
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html>
@@ -881,11 +860,25 @@ switch($_GET['mode'])
     <h2>{$title}</h2>
     {$content}
     <p style="text-align: right;">
-      <a href="#" onclick="window.close(); return false;">Close window</a>
+      <a href="#" onclick="window.close(); return false;">{$close_window}</a>
     </p>
   </body>
 </html>
 EOF;
+    exit;
+    break;
+  case 'langjs':
+    header('Content-type: text/javascript');
+    $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
+    $lang_js = $json->encode($lang->strings);
+    // use EEOF here because jEdit misinterprets "typ'eof'"
+    echo <<<EEOF
+if ( typeof(enano_lang) != 'object' )
+  var enano_lang = new Object();
+
+enano_lang[1] = $lang_js;
+
+EEOF;
     exit;
     break;
   default:
@@ -893,20 +886,20 @@ EOF;
 }
 
 $template = new template_nodb();
-$template->load_theme('oxygen', 'bleu', false);
+$template->load_theme('stpatty', 'shamrock', false);
 
 $modestrings = Array(
-              'welcome' => 'Welcome',
-              'license' => 'License Agreement',
-              'sysreqs' => 'Server requirements',
-              'database'=> 'Database information',
-              'website' => 'Website configuration',
-              'login'   => 'Administration login',
-              'confirm' => 'Confirm installation',
-              'install' => 'Database installation',
-              'finish'  => 'Installation complete',
+              'welcome' => $lang->get('welcome_modetitle'),
+              'license' => $lang->get('license_modetitle'),
+              'sysreqs' => $lang->get('sysreqs_modetitle'),
+              'database'=> $lang->get('database_modetitle'),
+              'website' => $lang->get('website_modetitle'),
+              'login'   => $lang->get('login_modetitle'),
+              'confirm' => $lang->get('confirm_modetitle'),
+              'install' => $lang->get('install_modetitle'),
+              'finish'  => $lang->get('finish_modetitle'),
               '_hiddenstages' => '...', // all stages below this line are hidden
-              'showlicense' => 'License Agreement'
+              'showlicense' => $lang->get('license_modetitle')
             );
 
 $sideinfo = '';
@@ -946,44 +939,78 @@ if(isset($_GET['mode']) && $_GET['mode'] == 'css')
   exit;
 }
 
-$template->header();
-if ( !isset($_GET['mode']) )
+if ( defined('ENANO_IS_STABLE') )
+  $branch = 'stable';
+else if ( defined('ENANO_IS_UNSTABLE') )
+  $branch = 'unstable';
+else
 {
-  $_GET['mode'] = 'welcome';
+  $version = explode('.', ENANO_VERSION);
+  if ( !isset($version[1]) )
+    // unknown branch, really
+    $branch = 'unstable';
+  else
+  {
+    $version[1] = intval($version[1]);
+    if ( $version[1] % 2 == 1 )
+      $branch = 'unstable';
+    else
+      $branch = 'stable';
+  }
 }
+
 switch($_GET['mode'])
 { 
   default:
   case 'welcome':
     ?>
     <div style="text-align: center; margin-top: 10px;">
-      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-blue.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
-      <h2>Welcome to Enano</h2>
-      <h3>version 1.0.2 &ndash; stable<br />
-      <span style="font-weight: normal;">also affectionately known as "coblynau" <tt>:)</tt></span></h3>
+      <img alt="[ Enano CMS Project logo ]" src="images/enano-artwork/installer-greeting-green.png" style="display: block; margin: 0 auto; padding-left: 100px;" />
+      <h2><?php echo $lang->get('welcome_heading'); ?></h2>
+      <h3>
+        <?php
+        $branch_l = $lang->get("welcome_branch_$branch");
+        
+        $v_string = sprintf('%s %s &ndash; %s', $lang->get('welcome_version'), ENANO_VERSION, $branch_l);
+        echo $v_string;
+        ?>
+      </h3>
       <?php
-      if ( file_exists('./_nightly.php') )
-      {
-        echo '<div class="warning-box" style="text-align: left; margin: 10px 0;"><b>You are about to install a NIGHTLY BUILD of Enano.</b><br />Nightly builds are NOT upgradeable and may contain serious flaws, security problems, or extraneous debugging information. Installing this version of Enano on a production site is NOT recommended.</div>';
-      }
+        if ( defined('ENANO_CODE_NAME') )
+        {
+          echo '<p>';
+          echo $lang->get('welcome_aka', array(
+              'codename' => strtolower(ENANO_CODE_NAME)
+            ));
+          echo '</p>';
+        }
       ?>
       <form action="install.php?mode=license" method="post">
-        <input type="submit" value="Start installation" />
+        <input type="submit" value="<?php echo $lang->get('welcome_btn_start'); ?>" />
       </form>
     </div>
     <?php
     break;
   case "license":
     ?>
-    <h3>Welcome to the Enano installer.</h3>
-     <p>Thank you for choosing Enano as your CMS. You've selected the finest in design, the strongest in security, and the latest in Web 2.0 toys. Trust us, you'll like it.</p>
-     <p>To get started, please read and accept the following license agreement. You've probably seen it before.</p>
+    <h3><?php echo $lang->get('license_heading'); ?></h3>
+     <p><?php echo $lang->get('license_blurb_thankyou'); ?></p>
+     <p><?php echo $lang->get('license_blurb_pleaseread'); ?></p>
      <?php show_license(); ?>
      <div class="pagenav">
        <form action="install.php?mode=sysreqs" method="post">
          <table border="0">
          <tr>
-         <td><input type="submit" value="I agree to the license terms" /></td><td><p><span style="font-weight: bold;">Before clicking continue:</span><br />&bull; Ensure that you agree with the terms of the license<br />&bull; Have your database host, name, username, and password available</p></td>
+           <td>
+             <input type="submit" value="<?php echo $lang->get('license_btn_i_agree'); ?>" />
+           </td>
+           <td>
+             <p>
+               <span style="font-weight: bold;"><?php echo $lang->get('meta_lbl_before_continue'); ?></span><br />
+               &bull; <?php echo $lang->get('license_objective_ensure_agree'); ?><br />
+               &bull; <?php echo $lang->get('license_objective_have_db_info'); ?>
+             </p>
+           </td>
          </tr>
          </table>
        </form>
@@ -993,20 +1020,19 @@ switch($_GET['mode'])
   case "sysreqs":
     error_reporting(E_ALL);
     ?>
-    <h3>Checking your server</h3>
-     <p>Enano has several requirements that must be met before it can be installed. If all is good then note any warnings and click Continue below.</p>
+    <h3><?php echo $lang->get('sysreqs_heading'); ?></h3>
+     <p><?php echo $lang->get('sysreqs_blurb'); ?></p>
     <table border="0" cellspacing="0" cellpadding="0">
     <?php
-    run_test('return version_compare(\'4.3.0\', PHP_VERSION, \'<\');', 'PHP Version >=4.3.0', 'It seems that the version of PHP that your server is running is too old to support Enano properly. If this is your server, please upgrade to the most recent version of PHP, remembering to use the --with-mysql configure option if you compile it yourself. If this is not your server, please contact your webhost and ask them if it would be possible to upgrade PHP. If this is not possible, you will need to switch to a different webhost in order to use Enano.');
-    run_test('return version_compare(\'5.2.0\', PHP_VERSION, \'<\');', 'PHP 5.2.0 or later', 'Your server does not have support for PHP 5.2.0. While you may continue installing Enano, please be warned that as of December 31, 2007, all support for Enano on PHP 4 servers is discontinued. If you have at least PHP 5.0.0, support will still be available, but there are many security problems in PHP versions under 5.2.0 that Enano cannot effectively prevent.', true);
-    run_test('return function_exists(\'mysql_connect\');', 'MySQL extension for PHP', 'It seems that your PHP installation does not have the MySQL extension enabled. If this is your own server, you may need to just enable the "libmysql.so" extension in php.ini. If you do not have the MySQL extension installed, you will need to either use your distribution\'s package manager to install it, or you will have to compile PHP from source. If you compile PHP from source, please remember to use the "--with-mysql" configure option, and you will have to have the MySQL development files installed (they usually are). If this is not your server, please contact your hosting company and ask them to install the PHP MySQL extension.');
-    run_test('return @ini_get(\'file_uploads\');', 'File upload support', 'It seems that your server does not support uploading files. Enano *requires* this functionality in order to work properly. Please ask your server administrator to set the "file_uploads" option in php.ini to "On".');
-    run_test('return is_apache();', 'Apache HTTP Server', 'Apparently your server is running a web server other than Apache. Enano will work nontheless, but there are some known bugs with non-Apache servers, and the "fancy" URLs will not work properly. The "Standard URLs" option will be set on the website configuration page, only change it if you are absolutely certain that your server is running Apache.', true);
-    //run_test('return function_exists(\'finfo_file\');', 'Fileinfo PECL extension', 'The MIME magic PHP extension is used to determine the type of a file by looking for a certain "magic" string of characters inside it. This functionality is used by Enano to more effectively prevent malicious file uploads. The MIME magic option will be disabled by default.', true);
-    run_test('return is_writable(ENANO_ROOT.\'/config.new.php\');', 'Configuration file writable', 'It looks like the configuration file, config.new.php, is not writable. Enano needs to be able to write to this file in order to install.<br /><br /><b>If you are installing Enano on a SourceForge web site:</b><br />SourceForge mounts the web partitions read-only now, so you will need to use the project shell service to symlink config.php to a file in the /tmp/persistent directory.');
-    run_test('return file_exists(\'/usr/bin/convert\');', 'ImageMagick support', 'Enano uses ImageMagick to scale images into thumbnails. Because ImageMagick was not found on your server, Enano will use the width= and height= attributes on the &lt;img&gt; tag to scale images. This can cause somewhat of a performance increase, but bandwidth usage will be higher, especially if you use high-resolution images on your site.<br /><br />If you are sure that you have ImageMagick, you can set the location of the "convert" program using the administration panel after installation is complete.', true);
-    run_test('return is_writable(ENANO_ROOT.\'/cache/\');', 'Cache directory writable', 'Apparently the cache/ directory is not writable. Enano will still work, but you will not be able to cache thumbnails, meaning the server will need to re-render them each time they are requested. In some cases, this can cause a significant slowdown.', true);
-    run_test('return is_writable(ENANO_ROOT.\'/files/\');', 'File uploads directory writable', 'It seems that the directory where uploaded files are stored (' . ENANO_ROOT . '/files) cannot be written by the server. Enano will still function, but file uploads will not function, and will be disabled by default.', true);
+    run_test('return version_compare(\'4.3.0\', PHP_VERSION, \'<\');', $lang->get('sysreqs_req_php'), $lang->get('sysreqs_req_desc_php') );
+    run_test('return version_compare(\'5.2.0\', PHP_VERSION, \'<\');', $lang->get('sysreqs_req_php5'), $lang->get('sysreqs_req_desc_php5'), true);
+    run_test('return function_exists(\'mysql_connect\');', $lang->get('sysreqs_req_mysql'), $lang->get('sysreqs_req_desc_mysql') );
+    run_test('return @ini_get(\'file_uploads\');', $lang->get('sysreqs_req_uploads'), $lang->get('sysreqs_req_desc_uploads') );
+    run_test('return is_apache();', $lang->get('sysreqs_req_apache'), $lang->get('sysreqs_req_desc_apache'), true);
+    run_test('return is_writable(ENANO_ROOT.\'/config.new.php\');', $lang->get('sysreqs_req_config'), $lang->get('sysreqs_req_desc_config') );
+    run_test('return file_exists(\'/usr/bin/convert\');', $lang->get('sysreqs_req_magick'), $lang->get('sysreqs_req_desc_magick'), true);
+    run_test('return is_writable(ENANO_ROOT.\'/cache/\');', $lang->get('sysreqs_req_cachewriteable'), $lang->get('sysreqs_req_desc_cachewriteable'), true);
+    run_test('return is_writable(ENANO_ROOT.\'/files/\');', $lang->get('sysreqs_req_fileswriteable'), $lang->get('sysreqs_req_desc_fileswriteable'), true);
     echo '</table>';
     if(!$failed)
     {
@@ -1016,27 +1042,39 @@ switch($_GET['mode'])
       <?php
       if($warned) {
         echo '<table border="0" cellspacing="0" cellpadding="0">';
-        run_test('return false;', 'Some of the features of Enano have been turned off to accommodate your server.', 'Enano has detected that some of the features or configuration settings on your server are not optimal for the best behavior and/or performance for Enano. As a result, Enano has disabled these features as a precaution to prevent errors and potential security issues.', true);
+        run_test('return false;', $lang->get('sysreqs_summary_warn_title'), $lang->get('sysreqs_summary_warn_body'), true);
         echo '</table>';
       } else {
         echo '<table border="0" cellspacing="0" cellpadding="0">';
-        run_test('return true;', '<b>Your server meets all the requirements for running Enano.</b><br />Click the button below to continue the installation.', 'You should never see this text. Congratulations for being an Enano hacker!');
+        run_test('return true;', '<b>' . $lang->get('sysreqs_summary_success_title') . '</b><br />' . $lang->get('sysreqs_summary_success_body'), 'You should never see this text. Congratulations for being an Enano hacker!');
         echo '</table>';
       }
       ?>
-       <form action="install.php?mode=database" method="post">
-         <table border="0">
-         <tr>
-         <td><input type="submit" value="Continue" /></td><td><p><span style="font-weight: bold;">Before clicking continue:</span><br />&bull; Ensure that you are satisfied with any scalebacks that may have been made to accomodate your server configuration<br />&bull; Have your database host, name, username, and password available</p></td>
-         </tr>
-         </table>
-       </form>
-     </div>
-     <?php
-    } else {
-      if($failed) {
+      <form action="install.php?mode=database" method="post">
+        <table border="0">
+        <tr>
+          <td>
+            <input type="submit" value="<?php echo $lang->get('meta_btn_continue'); ?>" />
+          </td>
+          <td>
+            <p>
+              <span style="font-weight: bold;"><?php echo $lang->get('meta_lbl_before_continue'); ?></span><br />
+              &bull; <?php echo $lang->get('sysreqs_objective_scalebacks'); ?><br />
+              &bull; <?php echo $lang->get('license_objective_have_db_info'); ?>
+            </p>
+          </td>
+        </tr>
+        </table>
+      </form>
+      </div>
+    <?php
+    }
+    else
+    {
+      if ( $failed )
+      {
         echo '<div class="pagenav"><table border="0" cellspacing="0" cellpadding="0">';
-        run_test('return false;', 'Your server does not meet the requirements for Enano to run.', 'As a precaution, Enano will not install until the above requirements have been met. Contact your server administrator or hosting company and convince them to upgrade. Good luck.');
+        run_test('return false;', $lang->get('sysreqs_summary_fail_title'), $lang->get('sysreqs_summary_fail_body'));
         echo '</table></div>';
       }
     }
@@ -1085,7 +1123,7 @@ switch($_GET['mode'])
         v = verify();
         if(!v)
         {
-          alert('One or more of the form fields is incorrect. Please correct any information in the form that has an "X" next to it.');
+          alert($lang.get('meta_msg_err_verification'));
           return false;
         }
         var frm = document.forms.dbinfo;
@@ -1108,10 +1146,10 @@ switch($_GET['mode'])
                 document.getElementById('s_db_name').src='images/good.gif';
                 document.getElementById('s_db_auth').src='images/good.gif';
                 document.getElementById('s_db_root').src='images/good.gif';
-                if(t.match(/_creating_db/)) document.getElementById('e_db_name').innerHTML = '<b>Warning:<\/b> The database you specified does not exist. It will be created during installation.';
-                if(t.match(/_creating_user/)) document.getElementById('e_db_auth').innerHTML = '<b>Warning:<\/b> The specified regular user does not exist or the password is incorrect. The user will be created during installation. If the user already exists, the password will be reset.';
+                if(t.match(/_creating_db/)) document.getElementById('e_db_name').innerHTML = $lang.get('database_msg_warn_creating_db');
+                if(t.match(/_creating_user/)) document.getElementById('e_db_auth').innerHTML = $lang.get('database_msg_warn_creating_user');
                 document.getElementById('s_mysql_version').src='images/good.gif';
-                document.getElementById('e_mysql_version').innerHTML = 'Your version of MySQL meets Enano requirements.';
+                document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_info_mysql_good');
               }
               else
               {
@@ -1122,50 +1160,50 @@ switch($_GET['mode'])
                   document.getElementById('s_db_name').src='images/unknown.gif';
                   document.getElementById('s_db_auth').src='images/unknown.gif';
                   document.getElementById('s_db_root').src='images/unknown.gif';
-                  document.getElementById('e_db_host').innerHTML = '<b>Error:<\/b> The database server "'+document.forms.dbinfo.db_host.value+'" couldn\'t be contacted.<br \/>'+t;
-                  document.getElementById('e_mysql_version').innerHTML = 'The MySQL version that your server is running could not be determined.';
+                  document.getElementById('e_db_host').innerHTML = $lang.get('database_msg_err_mysql_connect', { db_host: document.forms.dbinfo.db_host.value, mysql_error: t });
+                  document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_warn_mysql_version');
                   break;
                 case 'auth':
                   document.getElementById('s_db_host').src='images/good.gif';
                   document.getElementById('s_db_name').src='images/unknown.gif';
                   document.getElementById('s_db_auth').src='images/bad.gif';
                   document.getElementById('s_db_root').src='images/unknown.gif';
-                  document.getElementById('e_db_auth').innerHTML = '<b>Error:<\/b> Access to MySQL under the specified credentials was denied.<br \/>'+t;
-                  document.getElementById('e_mysql_version').innerHTML = 'The MySQL version that your server is running could not be determined.';
+                  document.getElementById('e_db_auth').innerHTML = $lang.get('database_msg_err_mysql_auth', { mysql_error: t });
+                  document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_warn_mysql_version');
                   break;
                 case 'perm':
                   document.getElementById('s_db_host').src='images/good.gif';
                   document.getElementById('s_db_name').src='images/bad.gif';
                   document.getElementById('s_db_auth').src='images/good.gif';
                   document.getElementById('s_db_root').src='images/unknown.gif';
-                  document.getElementById('e_db_name').innerHTML = '<b>Error:<\/b> Access to the specified database using those login credentials was denied.<br \/>'+t;
-                  document.getElementById('e_mysql_version').innerHTML = 'The MySQL version that your server is running could not be determined.';
+                  document.getElementById('e_db_name').innerHTML = $lang.get('database_msg_err_mysql_dbperm', { mysql_error: t });
+                  document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_warn_mysql_version');
                   break;
                 case 'name':
                   document.getElementById('s_db_host').src='images/good.gif';
                   document.getElementById('s_db_name').src='images/bad.gif';
                   document.getElementById('s_db_auth').src='images/good.gif';
                   document.getElementById('s_db_root').src='images/unknown.gif';
-                  document.getElementById('e_db_name').innerHTML = '<b>Error:<\/b> The specified database does not exist<br \/>'+t;
-                  document.getElementById('e_mysql_version').innerHTML = 'The MySQL version that your server is running could not be determined.';
+                  document.getElementById('e_db_name').innerHTML = $lang.get('database_msg_err_mysql_dbexist', { mysql_error: t });
+                  document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_warn_mysql_version');
                   break;
                 case 'root':
                   document.getElementById('s_db_host').src='images/good.gif';
                   document.getElementById('s_db_name').src='images/unknown.gif';
                   document.getElementById('s_db_auth').src='images/unknown.gif';
                   document.getElementById('s_db_root').src='images/bad.gif';
-                  document.getElementById('e_db_root').innerHTML = '<b>Error:<\/b> Access to MySQL under the specified credentials was denied.<br \/>'+t;
-                  document.getElementById('e_mysql_version').innerHTML = 'The MySQL version that your server is running could not be determined.';
+                  document.getElementById('e_db_root').innerHTML = $lang.get('database_msg_err_mysql_auth', { mysql_error: t });
+                  document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_warn_mysql_version');
                   break;
                 case 'vers':
                   document.getElementById('s_db_host').src='images/good.gif';
                   document.getElementById('s_db_name').src='images/good.gif';
                   document.getElementById('s_db_auth').src='images/good.gif';
                   document.getElementById('s_db_root').src='images/good.gif';
-                  if(t.match(/_creating_db/)) document.getElementById('e_db_name').innerHTML = '<b>Warning:<\/b> The database you specified does not exist. It will be created during installation.';
-                  if(t.match(/_creating_user/)) document.getElementById('e_db_auth').innerHTML = '<b>Warning:<\/b> The specified regular user does not exist or the password is incorrect. The user will be created during installation. If the user already exists, the password will be reset.';
+                  if(t.match(/_creating_db/)) document.getElementById('e_db_name').innerHTML = $lang.get('database_msg_warn_creating_db');
+                  if(t.match(/_creating_user/)) document.getElementById('e_db_auth').innerHTML = $lang.get('database_msg_warn_creating_user');
                   
-                  document.getElementById('e_mysql_version').innerHTML = '<b>Error:<\/b> Your version of MySQL ('+t+') is older than 4.1.17. Enano will still work, but there is a known bug with the comment system and MySQL 4.1.11 that involves some comments not being displayed, due to an issue with the PHP function mysql_fetch_row().';
+                  document.getElementById('e_mysql_version').innerHTML = $lang.get('database_msg_err_mysql_version', { mysql_version: t });
                   document.getElementById('s_mysql_version').src='images/bad.gif';
                 default:
                   alert(t);
@@ -1238,46 +1276,151 @@ switch($_GET['mode'])
       }
       window.onload = verify;
     </script>
-    <p>Now we need some information that will allow Enano to contact your database server. Enano uses MySQL as a data storage backend,
-       and we need to have access to a MySQL server in order to continue.</p>
-    <p>If you do not have access to a MySQL server, and you are using your own server, you can download MySQL for free from
-       <a href="http://www.mysql.com/">MySQL.com</a>. <b>Please note that, like Enano, MySQL is licensed under the GNU GPL.</b>
-       If you need to modify MySQL and then distribute your modifications, you must either distribute them under the terms of the GPL
-       or purchase a proprietary license.</p>
+    <p><?php echo $lang->get('database_blurb_needdb'); ?></p>
+    <p><?php echo $lang->get('database_blurb_howtomysql'); ?></p>
     <?php
-    if ( @file_exists('/etc/enano-is-virt-appliance') )
+    if ( file_exists('/etc/enano-is-virt-appliance') )
     {
-      echo '<p><b>MySQL login information for this virtual appliance:</b><br /><br />Database hostname: localhost<br />Database login: username "enano", password: "clurichaun" (without quotes)<br />Database name: enano_www1</p>';
+      echo '<p>
+              ' . $lang->get('database_vm_login_info', array( 'host' => 'localhost', 'user' => 'enano', 'pass' => 'clurichaun', 'name' => 'enano_www1' )) . '
+            </p>';
     }
     ?>
     <form name="dbinfo" action="install.php?mode=website" method="post">
       <table border="0">
-        <tr><td colspan="3" style="text-align: center"><h3>Database information</h3></td></tr>
-        <tr><td><b>Database hostname</b><br />This is the hostname (or sometimes the IP address) of your MySQL server. In many cases, this is "localhost".<br /><span style="color: #993300" id="e_db_host"></span></td><td><input onkeyup="verify();" name="db_host" size="30" type="text" /></td><td><img id="s_db_host" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td><b>Database name</b><br />The name of the actual database. If you don't already have a database, you can create one here, if you have the username and password of a MySQL user with administrative rights.<br /><span style="color: #993300" id="e_db_name"></span></td><td><input onkeyup="verify();" name="db_name" size="30" type="text" /></td><td><img id="s_db_name" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td rowspan="2"><b>Database login</b><br />These fields should be the username and password of a user with "select", "insert", "update", "delete", "create table", and "replace" privileges for your database.<br /><span style="color: #993300" id="e_db_auth"></span></td><td><input onkeyup="verify();" name="db_user" size="30" type="text" /></td><td rowspan="2"><img id="s_db_auth" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td><input name="db_pass" size="30" type="password" /></td></tr>
-        <tr><td colspan="3" style="text-align: center"><h3>Optional information</h3></td></tr>
-        <tr><td><b>Table prefix</b><br />The value that you enter here will be added to the beginning of the name of each Enano table. You may use lowercase letters (a-z), numbers (0-9), and underscores (_).</td><td><input onkeyup="verify();" name="table_prefix" size="30" type="text" /></td><td><img id="s_table_prefix" alt="Good/bad icon" src="images/good.gif" /></td></tr>
-        <tr><td rowspan="2"><b>Database administrative login</b><br />If the MySQL database or username that you entered above does not exist yet, you can create them here, assuming that you have the login information for an administrative user (such as root). Leave these fields blank unless you need to use them.<br /><span style="color: #993300" id="e_db_root"></span></td><td><input onkeyup="verify();" name="db_root_user" size="30" type="text" /></td><td rowspan="2"><img id="s_db_root" alt="Good/bad icon" src="images/good.gif" /></td></tr>
-        <tr><td><input onkeyup="verify();" name="db_root_pass" size="30" type="password" /></td></tr>
-        <tr><td><b>MySQL version</b></td><td id="e_mysql_version">MySQL version information will be checked when you click "Test Connection".</td><td><img id="s_mysql_version" alt="Good/bad icon" src="images/unknown.gif" /></td></tr>
-        <tr><td><b>Delete existing tables?</b><br />If this option is checked, all the tables that will be used by Enano will be dropped (deleted) before the schema is executed. Do NOT use this option unless specifically instructed to.</td><td><input type="checkbox" name="drop_tables" id="dtcheck" />  <label for="dtcheck">Drop existing tables</label></td></tr>
-        <tr><td colspan="3" style="text-align: center"><input type="button" value="Test connection" onclick="ajaxTestConnection();" /></td></tr>
+        <tr>
+          <td colspan="3" style="text-align: center">
+            <h3><?php echo $lang->get('database_table_title'); ?></h3>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('database_field_hostname_title'); ?></b>
+            <br /><?php echo $lang->get('database_field_hostname_body'); ?>
+            <br /><span style="color: #993300" id="e_db_host"></span>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="db_host" size="30" type="text" />
+          </td>
+          <td>
+            <img id="s_db_host" alt="Good/bad icon" src="images/bad.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('database_field_dbname_title'); ?></b><br />
+            <?php echo $lang->get('database_field_dbname_body'); ?><br />
+            <span style="color: #993300" id="e_db_name"></span>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="db_name" size="30" type="text" />
+          </td>
+          <td>
+            <img id="s_db_name" alt="Good/bad icon" src="images/bad.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td rowspan="2">
+            <b><?php echo $lang->get('database_field_dbauth_title'); ?></b><br />
+            <?php echo $lang->get('database_field_dbauth_body'); ?><br />
+            <span style="color: #993300" id="e_db_auth"></span>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="db_user" size="30" type="text" />
+          </td>
+          <td rowspan="2">
+            <img id="s_db_auth" alt="Good/bad icon" src="images/bad.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input name="db_pass" size="30" type="password" />
+          </td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align: center">
+            <h3><?php echo $lang->get('database_heading_optionalinfo'); ?></h3>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('database_field_tableprefix_title'); ?></b><br />
+            <?php echo $lang->get('database_field_tableprefix_body'); ?>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="table_prefix" size="30" type="text" />
+          </td>
+          <td>
+            <img id="s_table_prefix" alt="Good/bad icon" src="images/good.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td rowspan="2">
+            <b><?php echo $lang->get('database_field_rootauth_title'); ?></b><br />
+            <?php echo $lang->get('database_field_rootauth_body'); ?><br />
+            <span style="color: #993300" id="e_db_root"></span>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="db_root_user" size="30" type="text" />
+          </td>
+          <td rowspan="2">
+            <img id="s_db_root" alt="Good/bad icon" src="images/good.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input onkeyup="verify();" name="db_root_pass" size="30" type="password" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('database_field_mysqlversion_title'); ?></b>
+          </td>
+          <td id="e_mysql_version">
+            <?php echo $lang->get('database_field_mysqlversion_blurb_willbechecked'); ?>
+          </td>
+          <td>
+            <img id="s_mysql_version" alt="Good/bad icon" src="images/unknown.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('database_field_droptables_title'); ?></b><br />
+            <?php echo $lang->get('database_field_droptables_body'); ?>
+          </td>
+          <td>
+            <input type="checkbox" name="drop_tables" id="dtcheck" />  <label for="dtcheck"><?php echo $lang->get('database_field_droptables_lbl'); ?></label>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="3" style="text-align: center">
+            <input type="button" value="<?php echo $lang->get('database_btn_testconnection'); ?>" onclick="ajaxTestConnection();" />
+          </td>
+        </tr>
       </table>
       <div class="pagenav">
-       <table border="0">
-       <tr>
-       <td><input type="submit" value="Continue" onclick="return verify();" name="_cont" /></td><td><p><span style="font-weight: bold;">Before clicking continue:</span><br />&bull; Check your MySQL connection using the "Test Connection" button.<br />&bull; Be aware that your database information will be transmitted unencrypted several times.</p></td>
-       </tr>
-       </table>
-     </div>
+        <table border="0">
+          <tr>
+            <td>
+              <input type="submit" value="<?php echo $lang->get('meta_btn_continue'); ?>" onclick="return verify();" name="_cont" />
+            </td>
+            <td>
+              <p>
+                <span style="font-weight: bold;"><?php echo $lang->get('meta_lbl_before_continue'); ?></span><br />
+                &bull; <?php echo $lang->get('database_objective_test'); ?><br />
+                &bull; <?php echo $lang->get('database_objective_uncrypt'); ?>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </div>
     </form>
     <?php
     break;
   case "website":
-    if(!isset($_POST['_cont'])) {
-      echo 'No POST data signature found. Please <a href="install.php?mode=sysreqs">restart the installation</a>.';
+    if ( !isset($_POST['_cont']) )
+    {
+      echo 'No POST data signature found. Please <a href="install.php?mode=license">restart the installation</a>.';
       $template->footer();
       exit;
     }
@@ -1328,19 +1471,82 @@ switch($_GET['mode'])
           echo '<input type="hidden" name="'.htmlspecialchars($k[$i]).'" value="'.htmlspecialchars($_POST[$k[$i]]).'" />'."\n";
         }
       ?>
-      <p>The next step is to enter some information about your website. You can always change this information later, using the administration panel.</p>
+      <p><?php echo $lang->get('website_header_blurb'); ?></p>
       <table border="0">
-        <tr><td><b>Website name</b><br />The display name of your website. Allowed characters are uppercase and lowercase letters, numerals, and spaces. This must not be blank or "Enano".</td><td><input onkeyup="verify();" name="sitename" type="text" size="30" /></td><td><img id="s_name" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td><b>Website description</b><br />This text will be shown below the name of your website.</td><td><input onkeyup="verify();" name="sitedesc" type="text" size="30" /></td><td><img id="s_desc" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td><b>Copyright info</b><br />This should be a one-line legal notice that will appear at the bottom of all your pages.</td><td><input onkeyup="verify();" name="copyright" type="text" size="30" /></td><td><img id="s_copyright" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td><b>Wiki mode</b><br />This feature allows people to create and edit pages on your site. Enano keeps a history of all page modifications, and you can protect pages to prevent editing.</td><td><input name="wiki_mode" type="checkbox" id="wmcheck" />  <label for="wmcheck">Yes, make my website a wiki.</label></td><td></td></tr>
-        <tr><td><b>URL scheme</b><br />Choose how the page URLs will look. Depending on your server configuration, you may need to select the first option. If you don't know, select the first option, and you can always change it later.</td><td colspan="2"><input type="radio" <?php if(!is_apache()) echo 'checked="checked" '; ?>name="urlscheme" value="ugly" id="ugly">  <label for="ugly">Standard URLs - compatible with any web server (www.example.com/index.php?title=Page_name)</label><br /><input type="radio" <?php if(is_apache()) echo 'checked="checked" '; ?>name="urlscheme" value="short" id="short">  <label for="short">Short URLs - requires Apache with a PHP module (www.example.com/index.php/Page_name)</label><br /><input type="radio" name="urlscheme" value="tiny" id="petite">  <label for="petite">Tiny URLs - requires Apache on Linux/Unix/BSD with PHP module and mod_rewrite enabled (www.example.com/Page_name)</label><br /><small><a href="install.php?mode=pophelp&amp;topic=url_schemes" onclick="window.open(this.href, 'pophelpwin', 'width=550,height=400,status=no,toolbars=no,toolbar=no,address=no,scroll=yes'); return false;">Which URL scheme should I choose?</a></small></td></tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('website_field_name_title'); ?></b><br />
+            <?php echo $lang->get('website_field_name_body'); ?>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="sitename" type="text" size="30" />
+          </td>
+          <td>
+            <img id="s_name" alt="Good/bad icon" src="images/bad.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('website_field_desc_title'); ?></b><br />
+            <?php echo $lang->get('website_field_desc_body'); ?>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="sitedesc" type="text" size="30" />
+          </td>
+          <td>
+            <img id="s_desc" alt="Good/bad icon" src="images/bad.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('website_field_copyright_title'); ?></b><br />
+            <?php echo $lang->get('website_field_copyright_body'); ?>
+          </td>
+          <td>
+            <input onkeyup="verify();" name="copyright" type="text" size="30" />
+          </td>
+          <td>
+            <img id="s_copyright" alt="Good/bad icon" src="images/bad.gif" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('website_field_wikimode_title'); ?></b><br />
+            <?php echo $lang->get('website_field_wikimode_body'); ?>
+          </td>
+          <td>
+            <input name="wiki_mode" type="checkbox" id="wmcheck" />  <label for="wmcheck"><?php echo $lang->get('website_field_wikimode_checkbox'); ?></label>
+          </td>
+          <td>
+            &nbsp;
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <b><?php echo $lang->get('website_field_urlscheme_title'); ?></b><br />
+            <?php echo $lang->get('website_field_urlscheme_body'); ?>
+          </td>
+          <td colspan="2">
+            <input type="radio" <?php if(!is_apache()) echo 'checked="checked" '; ?>name="urlscheme" value="ugly" id="ugly"  />  <label for="ugly"><?php echo $lang->get('website_field_urlscheme_ugly'); ?></label><br />
+            <input type="radio" <?php if(is_apache()) echo 'checked="checked" '; ?>name="urlscheme" value="short" id="short" />  <label for="short"><?php echo $lang->get('website_field_urlscheme_short'); ?></label><br />
+            <input type="radio" name="urlscheme" value="tiny" id="petite">  <label for="petite"><?php echo $lang->get('website_field_urlscheme_tiny'); ?></label><br />
+            <small><a href="install.php?mode=pophelp&amp;topic=url_schemes" onclick="window.open(this.href, 'pophelpwin', 'width=550,height=400,status=no,toolbars=no,toolbar=no,address=no,scroll=yes'); return false;"><?php echo $lang->get('website_field_urlscheme_helplink'); ?></a></small>
+          </td>
+        </tr>
       </table>
       <div class="pagenav">
        <table border="0">
-       <tr>
-       <td><input type="submit" value="Continue" onclick="return verify();" name="_cont" /></td><td><p><span style="font-weight: bold;">Before clicking continue:</span><br />&bull; Verify that your site information is correct. Again, all of the above settings can be changed from the administration panel.</p></td>
-       </tr>
+         <tr>
+           <td>
+             <input type="submit" value="<?php echo $lang->get('meta_btn_continue'); ?>" onclick="return verify();" name="_cont" />
+           </td>
+           <td>
+             <p>
+               <span style="font-weight: bold;"><?php echo $lang->get('meta_lbl_before_continue'); ?></span><br />
+               &bull; <?php echo $lang->get('website_objective_verify'); ?>
+             </p>
+           </td>
+         </tr>
        </table>
      </div>
     </form>
@@ -1348,7 +1554,7 @@ switch($_GET['mode'])
     break;
   case "login":
     if(!isset($_POST['_cont'])) {
-      echo 'No POST data signature found. Please <a href="install.php?mode=sysreqs">restart the installation</a>.';
+      echo 'No POST data signature found. Please <a href="install.php?mode=license">restart the installation</a>.';
       $template->footer();
       exit;
     }
@@ -1365,7 +1571,7 @@ switch($_GET['mode'])
       $handle = @fopen(ENANO_ROOT.'/config.new.php', 'w');
       if(!$handle)
       {
-        echo '<p>ERROR: Cannot open config.php for writing - exiting!</p>';
+        echo '<p>ERROR: Despite my repeated attempts to verify that the configuration file can be written, I was indeed prevented from opening it for writing. Maybe you\'re still on <del>crack</del> Windows?</p>';
         $template->footer();
         exit;
       }
@@ -1426,40 +1632,69 @@ switch($_GET['mode'])
           echo '<input type="hidden" name="'.htmlspecialchars($k[$i]).'" value="'.htmlspecialchars($_POST[$k[$i]]).'" />'."\n";
         }
       ?>
-      <p>Next, enter your desired username and password. The account you create here will be used to administer your site.</p>
+      <p><?php echo $lang->get('login_header_blurb'); ?></p>
       <table border="0">
-        <tr><td><b>Administration username</b><br /><small>The administration username you will use to log into your site.<br />This cannot be "anonymous" or in the form of an IP address.</small></td><td><input onkeyup="verify();" name="admin_user" type="text" size="30" /></td><td><img id="s_user" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td>Administration password:</td><td><input onkeyup="verify();" name="admin_pass" type="password" size="30" /></td><td rowspan="2"><img id="s_password" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
-        <tr><td>Enter it again to confirm:</td><td><input onkeyup="verify();" name="admin_pass_confirm" type="password" size="30" /></td></tr>
-        <tr><td>Your e-mail address:</td><td><input onkeyup="verify();" name="admin_email" type="text" size="30" /></td><td><img id="s_email" alt="Good/bad icon" src="images/bad.gif" /></td></tr>
+        <tr>
+          <td><b><?php echo $lang->get('login_field_username_title'); ?></b><br /><small><?php echo $lang->get('login_field_username_body'); ?></small></td>
+          <td><input onkeyup="verify();" name="admin_user" type="text" size="30" /></td>
+          <td><img id="s_user" alt="Good/bad icon" src="images/bad.gif" /></td>
+        </tr>
+        <tr>
+          <td><?php echo $lang->get('login_field_password_title'); ?></td>
+          <td><input onkeyup="verify();" name="admin_pass" type="password" size="30" /></td>
+          <td rowspan="2"><img id="s_password" alt="Good/bad icon" src="images/bad.gif" /></td>
+        </tr>
+        <tr>
+          <td><?php echo $lang->get('login_field_password_confirm'); ?></td>
+          <td><input onkeyup="verify();" name="admin_pass_confirm" type="password" size="30" /></td>
+        </tr>
+        <tr>
+          <td><?php echo $lang->get('login_field_email_title'); ?></td>
+          <td><input onkeyup="verify();" name="admin_email" type="text" size="30" /></td>
+          <td><img id="s_email" alt="Good/bad icon" src="images/bad.gif" /></td>
+        </tr>
         <tr>
           <td>
-            Allow administrators to embed PHP code into pages:<br />
-            <small><span style="color: #D84308">Do not under any circumstances enable this option without reading these
-                   <a href="install.php?mode=pophelp&amp;topic=admin_embed_php"
-                      onclick="window.open(this.href, 'pophelpwin', 'width=550,height=400,status=no,toolbars=no,toolbar=no,address=no,scroll=yes'); return false;"
-                      style="color: #D84308; text-decoration: underline;">important security implications</a>.
-            </span></small>
+            <?php echo $lang->get('login_field_allowphp_title'); ?><br />
+            <small>
+              <span style="color: #D84308">
+                <?php
+                  echo $lang->get('login_field_allowphp_body',
+                    array(
+                      'important_notes' => '<a href="install.php?mode=pophelp&amp;topic=admin_embed_php" onclick="window.open(this.href, \'pophelpwin\', \'width=550,height=400,status=no,toolbars=no,toolbar=no,address=no,scroll=yes\'); return false;" style="color: #D84308; text-decoration: underline;">' . $lang->get('login_field_allowphp_isi') . '</a>'
+                      )
+                    );
+                ?>
+              </span>
+            </small>
           </td>
           <td>
-            <label><input type="radio" name="admin_embed_php" value="2" checked="checked" /> Disabled</label>&nbsp;&nbsp;
-            <label><input type="radio" name="admin_embed_php" value="4" /> Enabled</label>
+            <label><input type="radio" name="admin_embed_php" value="2" checked="checked" /> <?php echo $lang->get('login_field_allowphp_disabled'); ?></label>&nbsp;&nbsp;
+            <label><input type="radio" name="admin_embed_php" value="4" /> <?php echo $lang->get('login_field_allowphp_enabled'); ?></label>
           </td>
           <td></td>
         </tr>
-        <tr><td colspan="3">If your browser supports Javascript, the password you enter here will be encrypted with AES before it is sent to the server.</td></tr>
+        <tr><td colspan="3"><?php echo $lang->get('login_aes_blurb'); ?></td></tr>
       </table>
       <div class="pagenav">
        <table border="0">
-       <tr>
-       <td><input type="submit" value="Continue" onclick="return cryptdata();" name="_cont" /></td><td><p><span style="font-weight: bold;">Before clicking continue:</span><br />&bull; Remember the username and password you enter here! You will not be able to administer your site without the information you enter on this page.</p></td>
-       </tr>
+         <tr>
+           <td>
+             <input type="submit" value="<?php echo $lang->get('meta_btn_continue'); ?>" onclick="return cryptdata();" name="_cont" />
+           </td>
+           <td>
+             <p>
+               <span style="font-weight: bold;"><?php echo $lang->get('meta_lbl_before_continue'); ?></span><br />
+               &bull; <?php echo $lang->get('login_objective_remember'); ?>
+             </p>
+           </td>
+         </tr>
        </table>
       </div>
       <div id="cryptdebug"></div>
-     <input type="hidden" name="use_crypt" value="no" />
-     <input type="hidden" name="crypt_key" value="<?php echo $cryptkey; ?>" />
-     <input type="hidden" name="crypt_data" value="" />
+      <input type="hidden" name="use_crypt" value="no" />
+      <input type="hidden" name="crypt_key" value="<?php echo $cryptkey; ?>" />
+      <input type="hidden" name="crypt_data" value="" />
     </form>
     <script type="text/javascript">
     // <![CDATA[
@@ -1549,23 +1784,31 @@ switch($_GET['mode'])
           echo '<input type="hidden" name="'.htmlspecialchars($k[$i]).'" value="'.htmlspecialchars($_POST[$k[$i]]).'" />'."\n";
         }
       ?>
-      <h3>Enano is ready to install.</h3>
-       <p>The wizard has finished collecting information and is ready to install the database schema. Please review the information below,
-          and then click the button below to install the database.</p>
+      <h3><?php echo $lang->get('confirm_header_blurb_title'); ?></h3>
+       <p><?php echo $lang->get('confirm_header_blurb_body'); ?></p>
       <ul>
-        <li>Database hostname: <?php echo $_POST['db_host']; ?></li>
-        <li>Database name: <?php echo $_POST['db_name']; ?></li>
-        <li>Database user: <?php echo $_POST['db_user']; ?></li>
-        <li>Database password: &lt;hidden&gt;</li>
-        <li>Site name: <?php echo $_POST['sitename']; ?></li>
-        <li>Site description: <?php echo $_POST['sitedesc']; ?></li>
-        <li>Administration username: <?php echo $_POST['admin_user']; ?></li>
-        <li>Cipher strength: <?php echo (string)AES_BITS; ?>-bit AES<br /><small>Cipher strength is defined in the file constants.php; if you desire to change the cipher strength, you may do so and then restart installation. Unless your site is mission-critical, changing the cipher strength is not necessary.</small></li>
+        <li><?php echo $lang->get('confirm_lbl_db_host'); ?> <?php echo $_POST['db_host']; ?></li>
+        <li><?php echo $lang->get('confirm_lbl_db_name'); ?> <?php echo $_POST['db_name']; ?></li>
+        <li><?php echo $lang->get('confirm_lbl_db_user'); ?> <?php echo $_POST['db_user']; ?></li>
+        <li><?php echo $lang->get('confirm_lbl_db_pass'); ?></li>
+        <li><?php echo $lang->get('confirm_lbl_sitename'); ?> <?php echo $_POST['sitename']; ?></li>
+        <li><?php echo $lang->get('confirm_lbl_sitedesc'); ?> <?php echo $_POST['sitedesc']; ?></li>
+        <li><?php echo $lang->get('confirm_lbl_adminuser'); ?> <?php echo $_POST['admin_user']; ?></li>
+        <li><?php echo $lang->get('confirm_lbl_aesbits'); ?> <?php echo $lang->get('confirm_lbl_aes_strength', array( 'aes_bits' => AES_BITS )); ?><br /><small><?php echo $lang->get('confirm_lbl_aes_change'); ?></small></li>
       </ul>
       <div class="pagenav">
         <table border="0">
           <tr>
-            <td><input type="submit" value="Install Enano!" name="_cont" /></td><td><p><span style="font-weight: bold;">Before clicking continue:</span><br />&bull; Pray.</p></td>
+            <td>
+              <input type="submit" value="<?php echo $lang->get('confirm_btn_install_enano'); ?>" name="_cont" />
+            </td>
+            <td>
+              <p>
+                <span style="font-weight: bold;"><?php echo $lang->get('meta_lbl_before_continue'); ?></span><br />
+                <!-- Like this even needs to be localized. :-P -->
+                &bull; <?php echo $lang->get('confirm_objective_pray'); ?>
+              </p>
+            </td>
           </tr>
         </table>
       </div>
@@ -1586,7 +1829,7 @@ switch($_GET['mode'])
        !isset($_POST['urlscheme'])
        )
     {
-      echo 'The installer has detected that one or more required form values is not set. Please <a href="install.php?mode=sysreqs">restart the installation</a>.';
+      echo 'The installer has detected that one or more required form values is not set. Please <a href="install.php?mode=license">restart the installation</a>.';
       $template->footer();
       exit;
     }
@@ -1607,7 +1850,7 @@ switch($_GET['mode'])
     
     // $stages = array('connect', 'decrypt', 'genkey', 'parse', 'sql', 'writeconfig', 'renameconfig', 'startapi', 'initlogs');
     
-    if ( !preg_match('/^[a-z0-9_]*$/', $_POST['table_prefix']) )
+    if ( !preg_match('/^[a-z0-9_-]*$/', $_POST['table_prefix']) )
       err('Hacking attempt was detected in table_prefix.');
     
       start_install_table();
@@ -1618,17 +1861,17 @@ switch($_GET['mode'])
       
         // The stages connect, decrypt, genkey, and parse are preprocessing and don't do any actual data modification.
         // Thus, they need to be run on each retry, e.g. never skipped.
-        run_installer_stage('connect', 'Connect to MySQL', 'stg_mysql_connect', 'MySQL denied our attempt to connect to the database. This is most likely because your login information was incorrect. You will most likely need to <a href="install.php?mode=license">restart the installation</a>.', false);
+        run_installer_stage('connect', $lang->get('install_stg_connect_title'), 'stg_mysql_connect', $lang->get('install_stg_connect_body'), false);
         if ( isset($_POST['drop_tables']) )
         {
           // Are we supposed to drop any existing tables? If so, do it now
-          run_installer_stage('drop', 'Drop existing Enano tables', 'stg_drop_tables', 'This step never returns failure');
+          run_installer_stage('drop', $lang->get('install_stg_drop_title'), 'stg_drop_tables', 'This step never returns failure');
         }
-        run_installer_stage('decrypt', 'Decrypt administration password', 'stg_decrypt_admin_pass', 'The administration password you entered couldn\'t be decrypted. It is possible that your server did not properly store the encryption key in the configuration file. Please check the file permissions on config.new.php. You may have to return to the login stage of the installation, clear your browser cache, and then rerun this installation.', false);
-        run_installer_stage('genkey', 'Generate ' . AES_BITS . '-bit AES private key', 'stg_generate_aes_key', 'Enano encountered an internal error while generating the site encryption key. Please contact the Enano team for support.', false);
-        run_installer_stage('parse', 'Prepare to execute schema file', 'stg_parse_schema', 'Enano encountered an internal error while parsing the SQL file that contains the database structure and initial data. Please contact the Enano team for support.', false);
-        run_installer_stage('sql', 'Execute installer schema', 'stg_install', 'The installation failed because an SQL query wasn\'t quite correct. It is possible that you entered malformed data into a form field, or there may be a bug in Enano with your version of MySQL. Please contact the Enano team for support.', false);
-        run_installer_stage('writeconfig', 'Write configuration files', 'stg_write_config', 'Enano was unable to write the configuration file with your site\'s database credentials. This is almost always because your configuration file does not have the correct permissions. On Windows servers, you may see this message even if the check on the System Requirements page passed. Temporarily running IIS as the Administrator user may help.');
+        run_installer_stage('decrypt', $lang->get('install_stg_decrypt_title'), 'stg_decrypt_admin_pass', $lang->get('install_stg_decrypt_body'), false);
+        run_installer_stage('genkey', $lang->get('install_stg_genkey_title', array( 'aes_bits' => AES_BITS )), 'stg_generate_aes_key', $lang->get('install_stg_genkey_body'), false);
+        run_installer_stage('parse', $lang->get('install_stg_parse_title'), 'stg_parse_schema', $lang->get('install_stg_parse_body'), false);
+        run_installer_stage('sql', $lang->get('install_stg_sql_title'), 'stg_install', $lang->get('install_stg_sql_body'), false);
+        run_installer_stage('writeconfig', $lang->get('install_stg_writeconfig_title'), 'stg_write_config', $lang->get('install_stg_writeconfig_body'));
         
         // Mainstream installation complete - Enano should be usable now
         // The stage of starting the API is special because it has to be called out of function context.
@@ -1643,11 +1886,11 @@ switch($_GET['mode'])
         
         if ( is_object($db) && is_object($session) )
         {
-          run_installer_stage('startapi', 'Start the Enano API', 'stg_start_api_success', '...', false);
+          run_installer_stage('startapi', $lang->get('install_stg_startapi_title'), 'stg_start_api_success', '...', false);
         }
         else
         {
-          run_installer_stage('startapi', 'Start the Enano API', 'stg_start_api_failure', 'The Enano API could not be started. This is an error that should never occur; please contact the Enano team for support.', false);
+          run_installer_stage('startapi', $lang->get('install_stg_startapi_title'), 'stg_start_api_failure', $lang->get('install_stg_startapi_body'), false);
         }
         
         // We need to be logged in (with admin rights) before logs can be flushed
@@ -1658,10 +1901,8 @@ switch($_GET['mode'])
         $session->start();
         $paths->init();
         
-        run_installer_stage('initlogs', 'Initialize logs', 'stg_init_logs', '<b>The session manager denied the request to flush logs for the main page.</b><br />
-                             While under most circumstances you can still <a href="install.php?mode=finish">finish the installation</a> after renaming your configuration files, you should be aware that some servers cannot
-                             properly set cookies due to limitations with PHP. These limitations are exposed primarily when this issue is encountered during installation. If you choose
-                             to finish the installation, please be aware that you may be unable to log into your site.');
+        run_installer_stage('importlang', $lang->get('install_stg_importlang_title'), 'stg_import_language', $lang->get('install_stg_importlang_body'));
+        run_installer_stage('initlogs', $lang->get('install_stg_initlogs_title'), 'stg_init_logs', $lang->get('install_stg_initlogs_body'));
         
         run_installer_stage('buildindex', 'Initialize search index', 'stg_build_index', 'Something went wrong while the page manager was attempting to build a search index.');
         
@@ -1684,33 +1925,23 @@ switch($_GET['mode'])
       // In early revisions of 1.0.2, this step was performed prior to the initialization of the Enano API. It was decided to move
       // this stage to the end because it will fail more often than any other stage, thus making alternate routes imperative. If this
       // stage fails, then no big deal, we'll just have the user rename the files manually and then let them see the pretty success message.
-      run_installer_stage('renameconfig', 'Rename configuration files', 'stg_rename_config', 'Enano couldn\'t rename the configuration files to their correct production names. Please CHMOD the folder where your Enano files are to 777 and click the retry button below, <b><u>or</u></b> perform the following rename operations and then <a href="install.php?mode=finish">finish the installation</a>.<ul><li>Rename config.new.php to config.php</li><li>Rename .htaccess.new to .htaccess (only if you selected Tiny URLs)</li></ul>');
+      run_installer_stage('renameconfig', $lang->get('install_stg_rename_title'), 'stg_rename_config', $lang->get('install_stg_rename_body'));
       
       close_install_table();
       
       unset($template);
       $template =& $template_bak;
     
-      echo '<h3>Installation of Enano is complete.</h3><p>Review any warnings above, and then <a href="install.php?mode=finish">click here to finish the installation</a>.';
+      echo '<h3>' . $lang->get('install_msg_complete_title') . '</h3>';
+      echo '<p>' . $lang->get('install_msg_complete_body', array('finish_link' => 'install.php?mode=finish')) . '</p>';
       
       // echo '<script type="text/javascript">window.location="'.scriptPath.'/install.php?mode=finish";</script>';
       
     break;
   case "finish":
-    echo '<h3>Congratulations!</h3>
-           <p>You have finished installing Enano on this server.</p>
-          <h3>Now what?</h3>
-           <p>Click the link below to see the main page for your website. Where to go from here:</p>
-           <ul>
-             <li>The first thing you should do is log into your site using the Log in link on the sidebar.</li>
-             <li>Go into the Administration panel, expand General, and click General Configuration. There you will be able to configure some basic information about your site.</li>
-             <li>Visit the <a href="http://enanocms.org/Category:Plugins" onclick="window.open(this.href); return false;">Enano Plugin Gallery</a> to download and use plugins on your site.</li>
-             <li>Periodically create a backup of your database and filesystem, in case something goes wrong. This should be done at least once a week &ndash; more for wiki-based sites.</li>
-             <li>Hire some moderators, to help you keep rowdy users tame.</li>
-             <li>Tell the <a href="http://enanocms.org/Contact_us">Enano team</a> what you think.</li>
-             <li><b>Spread the word about Enano by adding a link to the Enano homepage on your sidebar!</b> You can enable this option in the General Configuration section of the administration panel.</li>
-           </ul>
-           <p><a href="index.php">Go to your website...</a></p>';
+    echo '<h3>' . $lang->get('finish_msg_congratulations') . '</h3>
+           ' . $lang->get('finish_body') . '
+           <p>' . $lang->get('finish_link_mainpage', array('mainpage_link' => 'index.php')) . '</p>';
     break;
   // this stage is never shown during the installation, but is provided for legal purposes
   case "showlicense":
