@@ -280,9 +280,10 @@ function get_page_title_ns($page_id, $namespace)
  * @param string $timeout Timeout, in seconds, to delay the redirect. Defaults to 3.
  */
 
-function redirect($url, $title = 'Redirecting...', $message = 'Please wait while you are redirected.', $timeout = 3)
+function redirect($url, $title = 'etc_redirect_title', $message = 'etc_redirect_body', $timeout = 3)
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
 
   if ( $timeout == 0 )
   {
@@ -315,7 +316,12 @@ function redirect($url, $title = 'Redirecting...', $message = 'Please wait while
 
   $template->tpl_strings['PAGE_NAME'] = $title;
   $template->header(true);
-  echo '<p>' . $message . '</p><p>If you are not redirected within ' . $timeout . ' seconds, <a href="' . str_replace('"', '\\"', $url) . '">please click here</a>.</p>';
+  echo '<p>' . $message . '</p>';
+  $subst = array(
+      'timeout' => ( $timeout + 1 ),
+      'redirect_url' => str_replace('"', '\\"', $url)
+    );
+  echo '<p>' . $lang->get('etc_redirect_timeout', $subst) . '</p>';
   $template->footer(true);
 
   $db->close();
@@ -443,7 +449,9 @@ function ip2hex($ip) {
   $str = '0x';
   foreach($nums as $n)
   {
-    $str .= (string)dechex($n);
+    $byte = (string)dechex($n);
+    if ( strlen($byte) < 2 )
+      $byte = '0' . $byte;
   }
   return $str;
 }
@@ -558,6 +566,7 @@ function grinding_halt($t, $p)
 function show_category_info()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   
   if ( $paths->namespace == 'Category' )
   {
@@ -673,9 +682,9 @@ function show_category_info()
   {
     echo '<div class="mdg-comment" style="margin: 10px 0 0 0;" id="category_box_wrapper">';
     echo '<div style="float: right;">';
-    echo '(<a href="#" onclick="ajaxCatToTag(); return false;">show page tags</a>)';
+    echo '(<a href="#" onclick="ajaxCatToTag(); return false;">' . $lang->get('tags_catbox_link') . '</a>)';
     echo '</div>';
-    echo '<div id="mdgCatBox">Categories: ';
+    echo '<div id="mdgCatBox">' . $lang->get('catedit_catbox_lbl_categories') . ' ';
     
     $where = '( c.page_id=\'' . $db->escape($paths->page_id) . '\' AND c.namespace=\'' . $db->escape($paths->namespace) . '\' )';
     $prefix = table_prefix;
@@ -705,13 +714,13 @@ EOF;
     }
     else
     {
-      echo '(Uncategorized)';
+      echo $lang->get('catedit_catbox_lbl_uncategorized');
     }
     
     $can_edit = ( $session->get_permissions('edit_cat') && ( !$paths->page_protected || $session->get_permissions('even_when_protected') ) );
     if ( $can_edit )
     {
-      $edit_link = '<a href="' . makeUrl($paths->page, 'do=catedit', true) . '" onclick="ajaxCatEdit(); return false;">edit categorization</a>';
+      $edit_link = '<a href="' . makeUrl($paths->page, 'do=catedit', true) . '" onclick="ajaxCatEdit(); return false;">' . $lang->get('catedit_catbox_link_edit') . '</a>';
       echo ' [ ' . $edit_link . ' ]';
     }
     
@@ -802,23 +811,19 @@ function show_file_info()
 function display_page_headers()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if($session->get_permissions('vote_reset') && $paths->cpage['delvotes'] > 0)
   {
     $delvote_ips = unserialize($paths->cpage['delvote_ips']);
     $hr = htmlspecialchars(implode(', ', $delvote_ips['u']));
-    $is = 'is';
-    $s = '';
-    $s2 = 's';
-    if ( $paths->cpage['delvotes'] > 1)
-    {
-      $is = 'are';
-      $s = 's';
-      $s2 = '';
-    }
+    
+    $string_id = ( $paths->cpage['delvotes'] == 1 ) ? 'delvote_lbl_votes_one' : 'delvote_lbl_votes_plural';
+    $string = $lang->get($string_id, array('num_users' => $paths->cpage['delvotes']));
+    
     echo '<div class="info-box" style="margin-left: 0; margin-top: 5px;" id="mdgDeleteVoteNoticeBox">
-            <b>Notice:</b> There '.$is.' '.$paths->cpage['delvotes'].' user'.$s.' that think'.$s2.' this page should be deleted.<br />
-            <b>Users that voted:</b> ' . $hr . '<br />
-            <a href="'.makeUrl($paths->page, 'do=deletepage').'" onclick="ajaxDeletePage(); return false;">Delete page</a>  |  <a href="'.makeUrl($paths->page, 'do=resetvotes').'" onclick="ajaxResetDelVotes(); return false;">Reset votes</a>
+            <b>' . $lang->get('etc_lbl_notice') . '</b> ' . $string . '<br />
+            <b>' . $lang->get('delvote_lbl_users_that_voted') . '</b> ' . $hr . '<br />
+            <a href="'.makeUrl($paths->page, 'do=deletepage').'" onclick="ajaxDeletePage(); return false;">' . $lang->get('delvote_btn_deletepage') . '</a>  |  <a href="'.makeUrl($paths->page, 'do=resetvotes').'" onclick="ajaxResetDelVotes(); return false;">' . $lang->get('delvote_btn_resetvotes') . '</a>
           </div>';
   }
 }
@@ -2351,7 +2356,6 @@ function paginate_array($q, $num_results, $result_url, $start = 0, $perpage = 10
   if ( $start < $total )
   {
     $link_offset = abs($start + $perpage);
-    // i'm tired of debugging a defective sprintf
     $url = htmlspecialchars(sprintf($result_url, strval($link_offset)));
     $link = "<a href=".'"'."$url".'"'." style='text-decoration: none;'>Next &raquo;</a>";
     $cls = ( $cls == 'row1' ) ? 'row2' : 'row1';
@@ -3189,6 +3193,55 @@ function register_cron_task($func, $hour_interval = 24)
   if ( !isset($cron_tasks[$hour_interval]) )
     $cron_tasks[$hour_interval] = array();
   $cron_tasks[$hour_interval][] = $func;
+}
+
+/**
+ * Installs a language.
+ * @param string The ISO-639-3 identifier for the language. Maximum of 6 characters, usually 3.
+ * @param string The name of the language in English (Spanish)
+ * @param string The name of the language natively (Español)
+ * @param string The path to the file containing the language's strings. Optional.
+ */
+
+function install_language($lang_code, $lang_name_neutral, $lang_name_local, $lang_file = false)
+{
+  global $db, $session, $paths, $template, $plugins; // Common objects
+  
+  $q = $db->sql_query('SELECT 1 FROM '.table_prefix.'language WHERE lang_code = "' . $db->escape($lang_code) . '";');
+  if ( !$q )
+    $db->_die('functions.php - checking for language existence');
+  
+  if ( $db->numrows() > 0 )
+    // Language already exists
+    return false;
+  
+  $q = $db->sql_query('INSERT INTO ' . table_prefix . 'language(lang_code, lang_name_default, lang_name_native) 
+                         VALUES(
+                           "' . $db->escape($lang_code) . '",
+                           "' . $db->escape($lang_name_neutral) . '",
+                           "' . $db->escape($lang_name_native) . '"
+                         );');
+  if ( !$q )
+    $db->_die('functions.php - installing language');
+  
+  $lang_id = $db->insert_id();
+  if ( empty($lang_id) || $lang_id == 0 )
+  {
+    $db->_die('functions.php - invalid returned lang_id');
+  }
+  
+  // Do we also need to install a language file?
+  if ( is_string($lang_file) && file_exists($lang_file) )
+  {
+    $lang = new Language($lang_id);
+    $lang->import($lang_file);
+  }
+  else if ( is_string($lang_file) && !file_exists($lang_file) )
+  {
+    echo '<b>Notice:</b> Can\'t load language file, so the specified language wasn\'t fully installed.<br />';
+    return false;
+  }
+  return true;
 }
 
 /**

@@ -186,7 +186,8 @@ function messagebox(type, title, message)
   {
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'OK';
+    btn.value = $lang.get('etc_ok');
+    btn._GenericName = 'OK';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
@@ -196,14 +197,16 @@ function messagebox(type, title, message)
   {
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'OK';
+    btn.value = $lang.get('etc_ok');
+    btn._GenericName = 'OK';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
     
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'Cancel';
+    btn.value = $lang.get('etc_cancel');
+    btn._GenericName = 'Cancel';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
@@ -213,14 +216,16 @@ function messagebox(type, title, message)
   {
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'Yes';
+    btn.value = $lang.get('etc_yes');
+    btn._GenericName = 'Yes';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
     
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'No';
+    btn.value = $lang.get('etc_no');
+    btn._GenericName = 'No';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
@@ -230,21 +235,24 @@ function messagebox(type, title, message)
   {
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'Yes';
+    btn.value = $lang.get('etc_yes');
+    btn._GenericName = 'Yes';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
     
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'No';
+    btn.value = $lang.get('etc_no');
+    btn._GenericName = 'No';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
     
     btn = document.createElement('input');
     btn.type = 'button';
-    btn.value = 'Cancel';
+    btn.value = $lang.get('etc_cancel');
+    btn._GenericName = 'Cancel';
     btn.onclick = this.clickHandler;
     btn.style.margin = '0 3px';
     buttondiv.appendChild(btn);
@@ -305,7 +313,7 @@ function mb_runFlyIn()
 
 function messagebox_click(obj, mb)
 {
-  val = obj.value;
+  val = ( typeof ( obj._GenericName ) == 'string' ) ? obj._GenericName : obj.value;
   if(typeof mb.onbeforeclick[val] == 'function')
   {
     var o = mb.onbeforeclick[val];
@@ -451,7 +459,7 @@ function changeOpac(opacity, id) {
 
 function mb_logout()
 {
-  var mb = new messagebox(MB_YESNO|MB_ICONQUESTION, 'Are you sure you want to log out?', 'If you log out, you will no longer be able to access your user preferences, your private messages, or certain areas of this site until you log in again.');
+  var mb = new messagebox(MB_YESNO|MB_ICONQUESTION, $lang.get('user_logout_confirm_title'), $lang.get('user_logout_confirm_body'));
   mb.onclick['Yes'] = function()
     {
       window.location = makeUrlNS('Special', 'Logout/' + title);

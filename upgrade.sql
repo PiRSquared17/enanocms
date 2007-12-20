@@ -3,7 +3,16 @@
 -- ALL NON-SQL LINES, even otherwise blank lines, must start with "--" or they will get sent to MySQL!
 -- Common tasks (version numbers)
 DELETE FROM {{TABLE_PREFIX}}config WHERE config_name='enano_version' OR config_name='enano_beta_version' OR config_name='enano_alpha_version' OR config_name='enano_rc_version';
-INSERT INTO {{TABLE_PREFIX}}config (config_name, config_value) VALUES( 'enano_version', '1.0.3' );
+INSERT INTO {{TABLE_PREFIX}}config (config_name, config_value) VALUES( 'enano_version', '1.1.1' );
+---BEGIN Stable1.0ToUnstable1.1---
+-- UPDATE {{TABLE_PREFIX}}groups SET group_id=9998 WHERE group_id=4;
+-- UPDATE {{TABLE_PREFIX}}group_members SET group_id=9998 WHERE group_id=4;
+-- INSERT INTO {{TABLE_PREFIX}}groups(group_id,group_name,group_type,system_group) VALUES(4, 'Regular members', 3, 1);
+CREATE TABLE {{TABLE_PREFIX}}lockout( id int(12) NOT NULL auto_increment, ipaddr varchar(40) NOT NULL, action ENUM('credential', 'level') NOT NULL DEFAULT 'credential', timestamp int(12) NOT NULL DEFAULT 0, PRIMARY KEY ( id ) ) CHARACTER SET `utf8`;
+CREATE TABLE {{TABLE_PREFIX}}language( lang_id smallint(5) NOT NULL auto_increment, lang_code varchar(16) NOT NULL, lang_name_default varchar(64) NOT NULL, lang_name_native varchar(64) NOT NULL, last_changed int(12) NOT NULL DEFAULT 0, PRIMARY KEY ( lang_id ) ) CHARACTER SET `utf8`;
+CREATE TABLE {{TABLE_PREFIX}}language_strings( string_id bigint(15) NOT NULL auto_increment, lang_id smallint(5) NOT NULL, string_category varchar(32) NOT NULL, string_name varchar(64) NOT NULL, string_content longtext NOT NULL, PRIMARY KEY ( string_id ) );
+ALTER TABLE {{TABLE_PREFIX}}users ADD COLUMN user_lang smallint(5) NOT NULL;
+---END Stable1.0ToUnstable1.1---
 ---BEGIN 1.0.2---
 -- No DB changes in this release
 ---END 1.0.2---
