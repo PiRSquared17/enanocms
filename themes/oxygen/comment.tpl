@@ -10,6 +10,13 @@
             <td valign="top" class="row1<!-- BEGIN is_friend --> row1_green<!-- END is_friend --><!-- BEGIN is_foe --> row1_red<!-- END is_foe -->">
               <b>{NAME}</b><br />
               <small>{USER_LEVEL}</small>
+              <!-- BEGIN user_has_avatar -->
+              <div class="avatar">
+                <a href="{USERPAGE_LINK}">
+                  <img alt="{AVATAR_ALT}" src="{AVATAR_URL}" style="border-width: 0px;" />
+                </a>
+              </div>
+              <!-- END user_has_avatar -->
             </td>
           </tr>
           <tr>
@@ -20,7 +27,7 @@
         </table>
       </td>
       <td class="row2">
-        <b>Subject:</b> <span id="subject_{ID}">{SUBJECT}</span>
+        <b>{lang:comment_lbl_subject}</b> <span id="subject_{ID}">{SUBJECT}</span>
       </td>
     </tr>
     <tr>
@@ -42,7 +49,7 @@
     <!-- BEGIN auth_mod -->
     <tr>
       <td class="row1">
-        <b>Moderation options:</b> {MOD_APPROVE_LINK} {MOD_DELETE_LINK}
+        <b>{lang:comment_lbl_mod_options}</b> {MOD_APPROVE_LINK} {MOD_DELETE_LINK}
       </td>
     </tr>
     <!-- END auth_mod -->

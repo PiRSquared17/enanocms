@@ -160,6 +160,8 @@ class PageProcessor
   function send( $do_stats = false )
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
+    global $lang;
+    
     if ( !$this->perms->get_permissions('read') )
     {
       $this->err_access_denied();
@@ -167,6 +169,15 @@ class PageProcessor
     }
     $pathskey = $paths->nslist[ $this->namespace ] . $this->page_id;
     $strict_no_headers = false;
+    if ( $this->namespace == 'Admin' && strstr($this->page_id, '/') )
+    {
+      $this->page_id = substr($this->page_id, 0, strpos($this->page_id, '/'));
+      $funcname = "page_{$this->namespace}_{$this->page_id}";
+      if ( function_exists($funcname) )
+      {
+        $this->page_exists = true;
+      }
+    }
     if ( isset($paths->pages[$pathskey]) )
     {
       if ( $paths->pages[$pathskey]['special'] == 1 )
@@ -195,7 +206,7 @@ class PageProcessor
     {
       if ( !$this->page_exists )
       {
-        redirect( makeUrl(getConfig('main_page')), 'Can\'t find special page', 'The special or administration page you requested does not exist. You will now be transferred to the main page.', 2 );
+        die_semicritical('Exception in PageProcessor', '<p>Special page not existent but exception not previously caught by path manager.</p>');
       }
       $func_name = "page_{$this->namespace}_{$this->page_id}";
       if ( function_exists($func_name) )
@@ -204,9 +215,8 @@ class PageProcessor
       }
       else
       {
-        $title = 'Page backend not found';
-        $message = "The administration page you are looking for was properly registered using the page API, but the backend function
-                    (<tt>$fname</tt>) was not found. If this is a plugin page, then this is almost certainly a bug with the plugin.";
+        $title = $lang->get('page_err_custompage_function_missing_title');
+        $message = $lang->get('page_err_custompage_function_missing_body', array( 'function_name' => $fname ));
                     
         if ( $this->send_headers )
         {
@@ -299,7 +309,7 @@ class PageProcessor
           $page_id_data = RenderMan::strToPageID($page_to);
           if ( count($this->redirect_stack) >= 3 )
           {
-            $this->render( (!$strict_no_headers), '<div class="usermessage"><b>The maximum number of internal redirects has been exceeded.</b></div>' );
+            $this->render( (!$strict_no_headers), '<div class="usermessage"><b>' . $lang->get('page_err_redirects_exceeded') . '</b></div>' );
           }
           else
           {
@@ -341,12 +351,14 @@ class PageProcessor
    * Updates the content of the page.
    * @param string The new text for the page
    * @param string A summary of edits made to the page.
+   * @param bool If true, the edit is marked as a minor revision
    * @return bool True on success, false on failure
    */
   
-  function update_page($text, $edit_summary = false)
+  function update_page($text, $edit_summary = false, $minor_edit = false)
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
+    global $lang;
     
     // Create the page if it doesn't exist
     if ( !$this->page_exists )
@@ -369,14 +381,14 @@ class PageProcessor
       $db->_die('PageProcess updating page content');
     if ( $db->numrows() < 1 )
     {
-      $this->raise_error('Page doesn\'t exist in the database');
+      $this->raise_error($lang->get('editor_err_no_rows'));
       return false;
     }
     
     // Do we have permission to edit the page?
     if ( !$this->perms->get_permissions('edit_page') )
     {
-      $this->raise_error('You do not have permission to edit this page.');
+      $this->raise_error($lang->get('editor_err_no_permission'));
       return false;
     }
     
@@ -388,7 +400,7 @@ class PageProcessor
       // The page is protected - do we have permission to edit protected pages?
       if ( !$this->perms->get_permissions('even_when_protected') )
       {
-        $this->raise_error('This page is protected, and you do not have permission to edit protected pages.');
+        $this->raise_error($lang->get('editor_err_page_protected'));
         return false;
       }
     }
@@ -400,12 +412,46 @@ class PageProcessor
              ( $session->user_logged_in && $session->reg_time + ( 4 * 86400 ) >= time() ) ) // If so, have they been registered for 4 days?
            && !$this->perms->get_permissions('even_when_protected') ) // And of course, is there an ACL that overrides semi-protection?
       {
-        $this->raise_error('This page is protected, and you do not have permission to edit protected pages.');
+        $this->raise_error($lang->get('editor_err_page_protected'));
         return false;
       }
     }
     
-    // Protection validated
+    //
+    // Protection validated; update page content
+    //
+    
+    $text_undb = RenderMan::preprocess_text($text, false, false);
+    $text = $db->escape($text_undb);
+    $author = $db->escape($session->username);
+    $time = time();
+    $edit_summary = ( strval($edit_summary) === $edit_summary ) ? $db->escape($edit_summary) : '';
+    $minor_edit = ( $minor_edit ) ? '1' : '0';
+    $date_string = date('d M Y h:i a');
+    
+    // Insert log entry
+    $sql = 'INSERT INTO ' . table_prefix . "logs ( time_id, date_string, log_type, action, page_id, namespace, author, page_text, edit_summary, minor_edit )\n"
+         . "  VALUES ( $time, '$date_string', 'page', 'edit', '{$this->page_id}', '{$this->namespace}', '$author', '$text', '$edit_summary', $minor_edit );";
+    if ( !$db->sql_query($sql) )
+    {
+      $this->raise_error($db->get_error());
+      return false;
+    }
+    
+    // Update the master text entry
+    $sql = 'UPDATE ' . table_prefix . "page_text SET page_text = '$text' WHERE page_id = '{$this->page_id}' AND namespace = '{$this->namespace}';";
+    if ( !$db->sql_query($sql) )
+    {
+      $this->raise_error($db->get_error());
+      return false;
+    }
+    
+    // Rebuild the search index
+    $paths->rebuild_page_index($this->page_id, $this->namespace);
+    
+    $this->text_cache = $text;
+    
+    return true;
     
   }
   
@@ -560,6 +606,7 @@ class PageProcessor
   function render($incl_inner_headers = true, $_errormsg = false)
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
+    global $lang;
     
     $text = $this->fetch_text();
     $text = preg_replace('/([\s]*)__NOBREADCRUMBS__([\s]*)/', '', $text);
@@ -593,11 +640,7 @@ class PageProcessor
                     <img alt="Cute wet-floor icon" src="'.scriptPath.'/images/redirector.png" />
                   </td>
                   <td valign="top" style="padding-left: 10px;">
-                    <b>This page is a <i>redirector</i>.</b><br />
-                    This means that this page will not show its own content by default. Instead it will display the contents of the page it redirects to.<br /><br />
-                    To create a redirect page, make the <i>first characters</i> in the page content <tt>#redirect [[Page_ID]]</tt>. For more information, see the
-                    Enano <a href="http://enanocms.org/Help:Wiki_formatting" onclick="window.open(this.href); return false;">Wiki formatting guide</a>.<br /><br />
-                    This page redirects to ' . $a . '.
+                    ' . $lang->get('page_msg_this_is_a_redirector', array( 'redirect_target' => $a )) . '
                   </td>
                 </tr>
               </table>
@@ -807,6 +850,7 @@ class PageProcessor
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
     global $email;
+    global $lang;
     
     $page_urlname = dirtify_page_id($this->page_id);
     if ( $this->page_id == $paths->page_id && $this->namespace == $paths->namespace )
@@ -841,14 +885,14 @@ class PageProcessor
     
     $template->tpl_strings['PAGE_NAME'] = htmlspecialchars($page_name);
     
-    $q = $db->sql_query('SELECT u.username, u.user_id AS authoritative_uid, u.real_name, u.email, u.reg_time, x.*, COUNT(c.comment_id) AS n_comments
+    $q = $db->sql_query('SELECT u.username, u.user_id AS authoritative_uid, u.real_name, u.email, u.reg_time, u.user_has_avatar, u.avatar_type, x.*, COUNT(c.comment_id) AS n_comments
                            FROM '.table_prefix.'users u
                            LEFT JOIN '.table_prefix.'users_extra AS x
                              ON ( u.user_id = x.user_id OR x.user_id IS NULL ) 
                            LEFT JOIN '.table_prefix.'comments AS c
                              ON ( ( c.user_id=u.user_id AND c.name=u.username AND c.approved=1 ) OR ( c.comment_id IS NULL AND c.approved IS NULL ) )
                            WHERE u.username=\'' . $db->escape($target_username) . '\'
-                           GROUP BY u.username, u.user_id, u.real_name, u.email, u.reg_time,x.user_id, x.user_aim, x.user_yahoo, x.user_msn, x.user_xmpp, x.user_homepage, x.user_location, x.user_job, x.user_hobbies, x.email_public;');
+                           GROUP BY u.username, u.user_id, u.real_name, u.email, u.reg_time, u.user_has_avatar, u.avatar_type, x.user_id, x.user_aim, x.user_yahoo, x.user_msn, x.user_xmpp, x.user_homepage, x.user_location, x.user_job, x.user_hobbies, x.email_public;');
     if ( !$q )
       $db->_die();
     
@@ -893,6 +937,10 @@ class PageProcessor
     // Basic user info
     
     echo '<tr><th class="subhead">All about ' . htmlspecialchars($target_username) . '</th></tr>';
+    if ( $userdata['user_has_avatar'] == '1' )
+    {
+      echo '<tr><td class="row1" style="text-align: center;"><img alt="' . $lang->get('usercp_avatar_image_alt', array('username' => $userdata['username'])) . '" src="' . make_avatar_url(intval($userdata['authoritative_uid']), $userdata['avatar_type']) . '" /></td></tr>';
+    }
     echo '<tr><td class="row3">Joined: ' . date('F d, Y h:i a', $userdata['reg_time']) . '</td></tr>';
     echo '<tr><td class="row1">Total comments: ' . $userdata['n_comments'] . '</td></tr>';
     
@@ -1147,19 +1195,29 @@ class PageProcessor
   function _handle_redirect($page_id, $namespace)
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
+    global $lang;
     $arr_pid = array($this->page_id, $this->namespace);
     if ( $namespace == 'Special' || $namespace == 'Admin' )
     {
-      return 'This page redirects to a Special or Administration page, which is not allowed.';
+      return $lang->get('page_err_redirect_to_special');
     }
-    if ( in_array($this->redirect_stack, $arr_pid) )
+    $looped = false;
+    foreach ( $this->redirect_stack as $page )
     {
-      return 'This page infinitely redirects with another page (or another series of pages), and the infinite redirect was trapped.';
+      if ( $page[0] == $arr_pid[0] && $page[1] == $arr_pid[1] )
+      {
+        $looped = true;
+        break;
+      }
+    }
+    if ( $looped )
+    {
+      return $lang->get('page_err_redirect_infinite_loop');
     }
     $page_id_key = $paths->nslist[ $namespace ] . sanitize_page_id($page_id);
     if ( !isset($paths->pages[$page_id_key]) )
     {
-      return 'This page redirects to another page that doesn\'t exist.';
+      return $lang->get('page_err_redirect_to_nonexistent');
     }
     $this->redirect_stack[] = $arr_pid;
     
@@ -1179,6 +1237,8 @@ class PageProcessor
   function err_access_denied()
   {
     global $db, $session, $paths, $template, $plugins; // Common objects
+    global $lang;
+    global $email;
     
     // Log it for crying out loud
     $q = $db->sql_query('INSERT INTO '.table_prefix.'logs(log_type,action,time_id,date_string,author,edit_summary,page_text) VALUES(\'security\', \'illegal_page\', '.time().', \''.date('d M Y h:i a').'\', \''.$db->escape($session->username).'\', \''.$db->escape($_SERVER['REMOTE_ADDR']).'\', \'' . $db->escape(serialize(array($this->page_id, $this->namespace))) . '\')');
@@ -1213,7 +1273,10 @@ class PageProcessor
       }
     }
     
-    $ob .= '<div class="error-box"><b>Access to this page is denied.</b><br />This may be because you are not logged in or you have not met certain criteria for viewing this page.</div>';
+    $email_link = $email->encryptEmail(getConfig('contact_email'), '', '', $lang->get('page_err_access_denied_siteadmin'));
+    
+    $ob .= "<h3>" . $lang->get('page_err_access_denied_title') . "</h3>";
+    $ob .= "<p>" . $lang->get('page_err_access_denied_body', array('site_administration' => $email_link)) . "</p>";
     
     if ( $this->send_headers )
     {

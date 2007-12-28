@@ -22,45 +22,45 @@ Author URI: http://enanocms.org/
  
 global $db, $session, $paths, $template, $plugins; // Common objects
 
-$plugins->attachHook('base_classes_initted', '
+$plugins->attachHook('session_started', '
   global $paths;
     $paths->add_page(Array(
-      \'name\'=>\'Create page\',
+      \'name\'=>\'specialpage_create_page\',
       \'urlname\'=>\'CreatePage\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
       ));
     
     $paths->add_page(Array(
-      \'name\'=>\'All pages\',
+      \'name\'=>\'specialpage_all_pages\',
       \'urlname\'=>\'AllPages\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
       ));
     
     $paths->add_page(Array(
-      \'name\'=>\'List of special pages\',
+      \'name\'=>\'specialpage_special_pages\',
       \'urlname\'=>\'SpecialPages\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
       ));
     
     $paths->add_page(Array(
-      \'name\'=>\'About Enano\',
+      \'name\'=>\'specialpage_about_enano\',
       \'urlname\'=>\'About_Enano\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
       ));
     
     $paths->add_page(Array(
-      \'name\'=>\'GNU General Public License\',
+      \'name\'=>\'specialpage_gnu_gpl\',
       \'urlname\'=>\'GNU_General_Public_License\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
       ));
     
     $paths->add_page(Array(
-      \'name\'=>\'Tag cloud\',
+      \'name\'=>\'specialpage_tag_cloud\',
       \'urlname\'=>\'TagCloud\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
@@ -72,6 +72,8 @@ $plugins->attachHook('base_classes_initted', '
 function page_Special_CreatePage()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
+  
   if ( isset($_POST['do']) )
   {
     $p = $_POST['pagename'];
@@ -88,7 +90,8 @@ function page_Special_CreatePage()
     {
       $template->header();
       
-      echo '<h3>The page could not be created.</h3><p>The name "'.$p.'" is invalid.</p>';
+      echo '<h3>' . $lang->get('pagetools_create_err_title') . '</h3>
+             <p>' . $lang->get('pagetools_create_err_name_invalid', array('page_name' => htmlspecialchars($p))) . '</p>';
       
       $template->footer();
       $db->close();
@@ -102,7 +105,8 @@ function page_Special_CreatePage()
     {
       $template->header();
       
-      echo '<h3>The page could not be created.</h3><p>The name "'.$paths->nslist[$namespace].$p.'" is invalid.</p>';
+      echo '<h3>' . $lang->get('pagetools_create_err_title') . '</h3>
+             <p>' . $lang->get('pagetools_create_err_name_invalid', array('page_name' => htmlspecialchars($paths->nslist[$namespace].$p))) . '</p>';
       
       $template->footer();
       $db->close();
@@ -118,7 +122,8 @@ function page_Special_CreatePage()
     {
       $template->header();
       
-      echo '<h3>The page could not be created.</h3><p>The page title can\'t start with "Project:" because this prefix is reserved for a parser shortcut.</p>';
+      echo '<h3>' . $lang->get('pagetools_create_err_title') . '</h3>
+             <p>' . $lang->get('pagetools_create_err_project_shortcut', array('page_name' => htmlspecialchars($p))) . '</p>';
       
       $template->footer();
       $db->close();
@@ -129,7 +134,7 @@ function page_Special_CreatePage()
     $tn = $paths->nslist[$_POST['namespace']] . $urlname;
     if ( isset($paths->pages[$tn]) )
     {
-      die_friendly('Error creating page', '<p>The page already exists.</p>');
+      die_friendly($lang->get('pagetools_create_err_title'), '<p>' . $lang->get('pagetools_create_err_already_exist') . '</p>');
     }
     
     if ( $paths->nslist[$namespace] == substr($urlname, 0, strlen($paths->nslist[$namespace]) ) )
@@ -154,7 +159,7 @@ function page_Special_CreatePage()
     
     $perms = $session->fetch_page_acl($urlname, $namespace);
     if ( !$perms->get_permissions('create_page') )
-      die_friendly('Error creating page', '<p>An access control rule is preventing you from creating pages.</p>');
+      die_friendly($lang->get('pagetools_create_err_title'), '<p>An access control rule is preventing you from creating pages.</p>');
     
     $q = $db->sql_query('INSERT INTO '.table_prefix.'logs(time_id,date_string,log_type,action,author,page_id,namespace) VALUES('.time().', \''.date('d M Y h:i a').'\', \'page\', \'create\', \''.$session->username.'\', \''.$urlname.'\', \''.$_POST['namespace'].'\');');
     if ( !$q )
@@ -188,7 +193,7 @@ function page_Special_CreatePage()
     exit;
   }
   */
-  echo RenderMan::render('Using the form below you can create a page.');
+  echo '<p>' . $lang->get('pagetools_create_blurb') . '</p>';
   ?>
   <form action="" method="post">
     <p>
@@ -199,7 +204,7 @@ function page_Special_CreatePage()
         {
           if ( $paths->nslist[$k[$i]] == '' )
           {
-            $s = '[No prefix]';
+            $s = $lang->get('pagetools_create_namespace_none');
           }
           else
           {
@@ -212,7 +217,7 @@ function page_Special_CreatePage()
         }
         ?>
       </select> <input type="text" name="pagename" /></p>
-      <p><input type="submit" name="do" value="Create Page" /></p>
+      <p><input type="submit" name="do" value="<?php echo $lang->get('pagetools_create_btn_create'); ?>" /></p>
   </form>
   <?php
   $template->footer();
@@ -263,9 +268,11 @@ function page_Special_AllPages()
 {
   // This should be an easy one
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
+  
   $template->header();
   $sz = sizeof( $paths->pages ) / 2;
-  echo '<p>Below is a list of all of the pages on this website.</p>';
+  echo '<p>' . $lang->get('pagetools_allpages_blurb') . '</p>';
   
   $q = $db->sql_query('SELECT COUNT(urlname) FROM '.table_prefix.'pages WHERE visible!=0;');
   if ( !$q )
@@ -328,7 +335,7 @@ function page_Special_SpecialPages()
   global $db, $session, $paths, $template, $plugins; // Common objects
   $template->header();
   $sz = sizeof($paths->pages) / 2;
-  echo '<p>Below is a list of all of the special pages on this website.</p><div class="tblholder"><table border="0" width="100%" cellspacing="1" cellpadding="4">';
+  echo '<p>' . $lang->get('pagetools_specialpages_blurb') . '</p><div class="tblholder"><table border="0" width="100%" cellspacing="1" cellpadding="4">';
   $cclass='row1';
   for ( $i = 0; $i < $sz; $i = $i)
   {
@@ -365,6 +372,8 @@ function page_Special_SpecialPages()
 function page_Special_About_Enano()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
+  
   $platform = 'Unknown';
   $uname = @file_get_contents('/proc/sys/kernel/ostype');
   if($uname == "Linux\n")
@@ -384,24 +393,53 @@ function page_Special_About_Enano()
   <br />
   <div class="tblholder">
     <table border="0" cellspacing="1" cellpadding="4">
-      <tr><th colspan="2" style="text-align: left;">About the Enano Content Management System</th></tr>
-      <tr><td colspan="2" class="row3"><p>This website is powered by <a href="http://enanocms.org/">Enano</a>, the lightweight and open source
-      CMS that everyone can use. Enano is copyright &copy; 2006-2007 Dan Fuhry. For legal information, along with a list of libraries that Enano
-      uses, please see <a href="http://enanocms.org/Legal_information">Legal Information</a>.</p>
-      <p>The developers and maintainers of Enano strongly believe that software should not only be free to use, but free to be modified,
-         distributed, and used to create derivative works. For more information about Free Software, check out the
-         <a href="http://en.wikipedia.org/wiki/Free_Software" onclick="window.open(this.href); return false;">Wikipedia page</a> or
-         the <a href="http://www.fsf.org/" onclick="window.open(this.href); return false;">Free Software Foundation's</a> homepage.</p>
-      <p>This program is Free Software; you can redistribute it and/or modify it under the terms of the GNU General Public License
-      as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.</p>
-      <p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
-      warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for details.</p>
-      <p>You should have received <a href="<?php echo makeUrlNS('Special', 'GNU_General_Public_License'); ?>">a copy of
-         the GNU General Public License</a> along with this program; if not, write to:</p>
-      <p style="margin-left 2em;">Free Software Foundation, Inc.,<br />
-         51 Franklin Street, Fifth Floor<br />
-         Boston, MA 02110-1301, USA</p>
-      <p>Alternatively, you can <a href="http://www.gnu.org/licenses/old-licenses/gpl-2.0.html">read it online</a>.</p>
+      <tr><th colspan="2" style="text-align: left;"><?php echo $lang->get('meta_enano_about_th'); ?></th></tr>
+      <tr><td colspan="2" class="row3">
+        <?php
+        echo $lang->get('meta_enano_about_poweredby');
+        $subst = array(
+            'gpl_link' => makeUrlNS('Special', 'GNU_General_Public_License')
+          );
+        echo $lang->get('meta_enano_about_gpl', $subst);
+        if ( $lang->lang_code != 'eng' ):
+        // Do not remove this block of code. Doing so is a violation of the GPL. (A copy of the GPL in other languages
+        // must be accompanied by a copy of the English GPL.)
+        ?>
+        <h3>(English)</h3>
+        <p>
+          This website is powered by <a href="http://enanocms.org/">Enano</a>, the lightweight and open source CMS that everyone can use.
+          Enano is copyright &copy; 2006-2007 Dan Fuhry. For legal information, along with a list of libraries that Enano uses, please
+          see <a href="http://enanocms.org/Legal_information">Legal Information</a>.
+        </p>
+        <p>
+          The developers and maintainers of Enano strongly believe that software should not only be free to use, but free to be modified,
+          distributed, and used to create derivative works. For more information about Free Software, check out the
+          <a href="http://en.wikipedia.org/wiki/Free_Software" onclick="window.open(this.href); return false;">Wikipedia page</a> or
+          the <a href="http://www.fsf.org/" onclick="window.open(this.href); return false;">Free Software Foundation's</a> homepage.
+        </p>
+        <p>
+          This program is Free Software; you can redistribute it and/or modify it under the terms of the GNU General Public License
+          as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+        </p>
+        <p>
+          This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+          warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for details.
+        </p>
+        <p>
+          You should have received <a href="<?php echo makeUrlNS('Special', 'GNU_General_Public_License'); ?>">a copy of
+          the GNU General Public License</a> along with this program; if not, write to:
+        </p>
+        <p style="margin-left 2em;">
+          Free Software Foundation, Inc.,<br />
+          51 Franklin Street, Fifth Floor<br />
+          Boston, MA 02110-1301, USA
+        </p>
+        <p>
+          Alternatively, you can <a href="http://www.gnu.org/licenses/old-licenses/gpl-2.0.html">read it online</a>.
+        </p>
+        <?php
+        endif;
+        ?>
       </td></tr>
       <tr>
         <td class="row2" colspan="2">
@@ -440,23 +478,23 @@ function page_Special_About_Enano()
           </table>
         </td>
       </tr>
-      <tr><td style="width: 100px;" class="row1"><a href="http://enanocms.org">Enano</a> version:</td><td class="row1"><?php echo enano_version(true) . ' (' . enano_codename() . ')'; ?></td></tr>
-      <tr><td style="width: 100px;" class="row2">Web server:</td><td class="row2"><?php if(isset($_SERVER['SERVER_SOFTWARE'])) echo $_SERVER['SERVER_SOFTWARE']; else echo 'Unable to determine web server software.'; ?></td></tr>
-      <tr><td style="width: 100px;" class="row1">Server platform:</td><td class="row1"><?php echo $platform; ?></td></tr>
-      <tr><td style="width: 100px;" class="row2"><a href="http://www.php.net/">PHP</a> version:</td><td class="row2"><?php echo PHP_VERSION; ?></td></tr>
+      <tr><td style="width: 100px;" class="row1"><?php echo $lang->get('meta_enano_about_lbl_enanoversion'); ?></td><td class="row1"><?php echo enano_version(true) . ' (' . enano_codename() . ')'; ?></td></tr>
+      <tr><td style="width: 100px;" class="row2"><?php echo $lang->get('meta_enano_about_lbl_webserver'); ?></td><td class="row2"><?php if(isset($_SERVER['SERVER_SOFTWARE'])) echo $_SERVER['SERVER_SOFTWARE']; else echo 'Unable to determine web server software.'; ?></td></tr>
+      <tr><td style="width: 100px;" class="row1"><?php echo $lang->get('meta_enano_about_lbl_serverplatform'); ?></td><td class="row1"><?php echo $platform; ?></td></tr>
+      <tr><td style="width: 100px;" class="row2"><?php echo $lang->get('meta_enano_about_lbl_phpversion'); ?></td><td class="row2"><?php echo PHP_VERSION; ?></td></tr>
       <?php
       switch(ENANO_DBLAYER)
       {
         case 'MYSQL':
           ?>
-          <tr><td style="width: 100px;" class="row1"><a href="http://www.mysql.com/">MySQL</a> version:</td><td class="row1"><?php echo mysql_get_server_info($db->_conn); ?></td></tr>
+          <tr><td style="width: 100px;" class="row1"><?php echo $lang->get('meta_enano_about_lbl_mysqlversion'); ?></td><td class="row1"><?php echo mysql_get_server_info($db->_conn); ?></td></tr>
           <?php
           break;
         case 'PGSQL':
           $pg_serverdata = pg_version($db->_conn);
           $pg_version = $pg_serverdata['server'];
           ?>
-          <tr><td style="width: 100px;" class="row1"><a href="http://www.postgresql.org/">PostgreSQL</a> version:</td><td class="row1"><?php echo $pg_version; ?></td></tr>
+          <tr><td style="width: 100px;" class="row1"><?php echo $lang->get('meta_enano_about_lbl_pgsqlversion'); ?></td><td class="row1"><?php echo $pg_version; ?></td></tr>
           <?php
           break;
       }
@@ -470,15 +508,36 @@ function page_Special_About_Enano()
 function page_Special_GNU_General_Public_License()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
+  
   $template->header();
-  if(file_exists(ENANO_ROOT.'/GPL'))
+  if(file_exists(ENANO_ROOT . '/GPL'))
   {
+    echo '<p>' . $lang->get('pagetools_gpl_blurb', array('about_url' => makeUrlNS('Special', 'About_Enano'))) . '</p>';
+    
+    if ( $lang->lang_code != 'eng' ):
+    // Do not remove this block of code. Doing so is a violation of the GPL. (A copy of the GPL in other languages
+    // must be accompanied by a copy of the English GPL.)
     echo '<p>The following text represents the license that the <a href="'.makeUrlNS('Special', 'About_Enano').'">Enano</a> content management system is under. To make it easier to read, the text has been wiki-formatted; in no other way has it been changed.</p>';
+    endif;
+    
+    if ( file_exists(ENANO_ROOT . "/GPL_{$lang->lang_code}") )
+    {
+      echo '<h2>' . $lang->get('pagetools_gpl_title_native') . '</h2>';
+      echo '<p><a href="#gpl_english">' . $lang->get('pagetools_gpl_link_to_english') . ' / View the license in English' . '</a></p>';
+      echo RenderMan::render( file_get_contents ( ENANO_ROOT . "/GPL_{$lang->lang_code}" ) );
+      echo '<h2>' . $lang->get('pagetools_gpl_title_english') . ' / English version<a name="gpl_english" id="gpl_english"></a></h2>';
+    }
+    
     echo RenderMan::render( file_get_contents ( ENANO_ROOT . '/GPL' ) );
   }
   else
   {
-    echo '<p>It appears that the file "GPL" is missing from your Enano installation. You may find a wiki-formatted copy of the GPL at: <a href="http://enanocms.org/GPL">http://enanocms.org/GPL</a>.</p>';
+    echo '<p>' . $lang->get('pagetools_gpl_err_file_missing') . '</p>';
+    if ( $lang->lang_code != 'eng')
+      // Also print out English version
+      // Do not remove the following line of code; doing so would be a violation of the GPL.
+      echo '<p>It appears that the file "GPL" is missing from your Enano installation. You may find a wiki-formatted copy of the GPL at: <a href="http://enanocms.org/GPL">http://enanocms.org/GPL</a>. In the mean time, you may wish to contact the site administration and ask them to replace the GPL file.</p>';
   }
   $template->footer();
 }
@@ -486,6 +545,7 @@ function page_Special_GNU_General_Public_License()
 function page_Special_TagCloud()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   
   $template->header();
   
@@ -499,7 +559,7 @@ function page_Special_TagCloud()
     {
       echo '<div class="tblholder">
               <table border="0" cellspacing="1" cellpadding="4">';
-      echo '<tr><th colspan="2">Pages tagged "' . htmlspecialchars($tag) . '"</th></tr>';
+      echo '<tr><th colspan="2">' . $lang->get('pagetools_tagcloud_pagelist_th', array('tag' => htmlspecialchars($tag))) . '</th></tr>';
       echo '<tr>';
       $i = 0;
       $td_class = 'row1';
@@ -528,7 +588,7 @@ function page_Special_TagCloud()
       }
       // " workaround for jEdit highlighting bug
       echo '<tr>
-              <th colspan="2" class="subhead"><a href="' . makeUrlNS('Special', 'TagCloud') . '" style="color: white;">&laquo; Return to tag cloud</a></th>
+              <th colspan="2" class="subhead"><a href="' . makeUrlNS('Special', 'TagCloud') . '">&laquo; ' . $lang->get('pagetools_tagcloud_btn_return') . '</a></th>
             </tr>';
       echo '</table>';
       echo '</div>';
@@ -543,17 +603,17 @@ function page_Special_TagCloud()
       $db->_die();
     if ( $db->numrows() < 1 )
     {
-      echo '<p>No pages are tagged yet.</p>';
+      echo '<p>' . $lang->get('pagetools_tagcloud_msg_no_tags') . '</p>';
     }
     else
     {
-      echo '<h3>Summary of page tagging</h3>';
+      echo '<h3>' . $lang->get('pagetools_tagcloud_blurb') . '</h3>';
       while ( $row = $db->fetchrow() )
       {
         $cloud->add_word($row['tag_name']);
       }
       echo $cloud->make_html('normal');
-      echo '<p>Hover your mouse over a tag to see how many pages have the tag. Click on a tag to see a list of the pages that have it.</p>';
+      echo '<p>' . $lang->get('pagetools_tagcloud_instructions') . '</p>';
     }
   }
   
@@ -564,6 +624,7 @@ function page_Special_TagCloud()
 function sidebar_add_tag_cloud()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   $cloud = new TagCloud();
     
   $q = $db->sql_query('SELECT tag_name FROM '.table_prefix.'tags;');
@@ -571,7 +632,7 @@ function sidebar_add_tag_cloud()
     $db->_die();
   if ( $db->numrows() < 1 )
   {
-    $sb_html = 'No pages are tagged yet.';
+    $sb_html = $lang->get('pagetools_tagcloud_msg_no_tags');
   }
   else
   {
@@ -579,9 +640,9 @@ function sidebar_add_tag_cloud()
     {
       $cloud->add_word($row['tag_name']);
     }
-    $sb_html = $cloud->make_html('small', 'justify') . '<br /><a style="text-align: center;" href="' . makeUrlNS('Special', 'TagCloud') . '">Larger version</a>';
+    $sb_html = $cloud->make_html('small', 'justify') . '<br /><a style="text-align: center;" href="' . makeUrlNS('Special', 'TagCloud') . '">' . $lang->get('pagetools_tagcloud_sidebar_btn_larger') . '</a>';
   }
-  $template->sidebar_widget('Tag cloud', "<div style='padding: 5px;'>$sb_html</div>");
+  $template->sidebar_widget($lang->get('pagetools_tagcloud_sidebar_title'), "<div style='padding: 5px;'>$sb_html</div>");
 }
 
 $plugins->attachHook('compile_template', 'sidebar_add_tag_cloud();');

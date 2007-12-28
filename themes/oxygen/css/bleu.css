@@ -7,6 +7,7 @@
 /* The basics */
 html,body                          { height: 100%; }
 body                               { /* color added in 1.0.2 to fix light text in dark desktop themes */ color: #202020; margin: 0; padding: 0; background: url(../images/bleu/bg.png); font-family: trebuchet ms, verdana, arial, helvetica, sans-serif; font-size: 9pt; }
+body#tinymce                       { background-color: white; background-image: none; }
 .holder                            { border: 1px solid #CCCCCC; padding: 1px; background-color: #FFFFFF; color: #444444 }
 div.pad                            { padding: 10px; }                         
 table#title                        { margin: 0; padding: 0; height: 100px; background-color: #90B0D0; text-align: center; }
@@ -251,6 +252,12 @@ input[type ^="image"][disabled ^="disabled"] {
   filter: alpha(opacity=50);
 }
 
+input[type ^="button"][disabled ^="disabled"], input[type ^="submit"][disabled ^="disabled"], button[disabled ^="disabled"], .btn-disabled {
+  color: #808080 !important;
+  background-image: none !important;
+  background-color: #e0e0e0 !important;
+}
+
 /* JWS window theming */
 div.jswindow                      { border: 2px solid #7090B0; border-top: 5px solid #7090B0; padding: 0px; font-family: Trebuchet MS, tahoma, verdana, arial, sans-serif; font-size: 9pt; display: none; position: absolute; background-color: #FFFFFF; }
 div.titlebar                      { background-color: #7090B0; color: #FFFFFF; font-family: Trebuchet MS, tahoma, verdana, arial, sans-serif; font-size: 9pt; padding-bottom: 4px; cursor: default; }
@@ -264,11 +271,11 @@ div.jswindow div.content          { padding: 10px; margin: 0; background-color: 
 .catCheck:hover                   { padding: 3px; background-color: #F0F0F0; }
 
 /* Information, warning, question, error, and wait boxes */
-div.error-box                     { background-image: url(../../../images/error.png);    background-position: 8px 8px; background-repeat: no-repeat; background-color: #FFF4F4; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 1em 0 0 1em; min-height: 25px; }
-div.info-box                      { background-image: url(../../../images/info.png);     background-position: 8px 8px; background-repeat: no-repeat; background-color: #F4F4FF; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 1em 0 0 1em; min-height: 25px; }
-div.warning-box                   { background-image: url(../../../images/warning.png);  background-position: 8px 8px; background-repeat: no-repeat; background-color: #FFFFF4; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 1em 0 0 1em; min-height: 25px; }
-div.question-box                  { background-image: url(../../../images/question.png); background-position: 8px 8px; background-repeat: no-repeat; background-color: #F4FFF4; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 1em 0 0 1em; min-height: 25px; }
-div.wait-box                      { background-image: url(../../../images/wait.png);     background-position: 8px 8px; background-repeat: no-repeat; background-color: #FFF4FF; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 1em 0 0 1em; min-height: 25px; }
+div.error-box                     { background-image: url(../../../images/error.png);    background-position: 8px 8px; background-repeat: no-repeat; background-color: #FFF4F4; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 0.5em 0 0 0; min-height: 25px; }
+div.info-box                      { background-image: url(../../../images/info.png);     background-position: 8px 8px; background-repeat: no-repeat; background-color: #F4F4FF; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 0.5em 0 0 0; min-height: 25px; }
+div.warning-box                   { background-image: url(../../../images/warning.png);  background-position: 8px 8px; background-repeat: no-repeat; background-color: #FFFFF4; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 0.5em 0 0 0; min-height: 25px; }
+div.question-box                  { background-image: url(../../../images/question.png); background-position: 8px 8px; background-repeat: no-repeat; background-color: #F4FFF4; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 0.5em 0 0 0; min-height: 25px; }
+div.wait-box                      { background-image: url(../../../images/wait.png);     background-position: 8px 8px; background-repeat: no-repeat; background-color: #FFF4FF; border: 1px dashed #406080; padding: 10px 10px 10px 50px; margin: 0.5em 0 0 0; min-height: 25px; }
 
 /* This stuff is mostly unused, left in for compatibility */
 div#ajaxEditContainer table       { border: 0px solid #FFFFFF; }

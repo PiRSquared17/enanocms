@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0.3 (Dyrad)
+ * Version 1.1.1
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -164,6 +164,11 @@ class mysql {
           define('contentPath', "$sp/index.php?title=");
         }
         $loc = scriptPath . '/install.php';
+        define('IN_ENANO_INSTALL', 1);
+        $GLOBALS['lang'] = new Language('eng');
+        global $lang;
+        $lang->load_file('./language/english/enano.json');
+        $lang->load_file('./language/english/install.json');
         // header("Location: $loc");
         redirect($loc, 'Enano not installed', 'We can\'t seem to find an Enano installation (valid config file). You will be transferred to the installation wizard momentarily...', 3);
         exit;

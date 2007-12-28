@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0.3 (Dyrad)
+ * Version 1.1.1
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -35,7 +35,7 @@
     define('ENANO_ROOT', dirname($filename));
     require(ENANO_ROOT.'/includes/functions.php');
     require(ENANO_ROOT.'/includes/dbal.php');
-    require(ENANO_ROOT.'/includes/json.php');
+    require(ENANO_ROOT.'/includes/json2.php');
     
     require(ENANO_ROOT . '/config.php');
     unset($dbuser, $dbpasswd);
@@ -47,7 +47,6 @@
     $db->connect();
     
     // result is sent using JSON
-    $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
     $return = Array(
         'mode' => 'success',
         'users_real' => Array()
@@ -61,7 +60,7 @@
         'mode' => 'error',
         'error' => 'Invalid URI'
       );
-      die( $json->encode($return) );
+      die( enano_json_encode($return) );
     }
     $allowanon = ( isset($_GET['allowanon']) && $_GET['allowanon'] == '1' ) ? '' : ' AND user_id > 1';
     $q = $db->sql_query('SELECT username FROM '.table_prefix.'users WHERE ' . ENANO_SQLFUNC_LOWERCASE . '(username) LIKE ' . ENANO_SQLFUNC_LOWERCASE . '(\'%'.$name.'%\')' . $allowanon . ' ORDER BY username ASC;');
@@ -80,7 +79,7 @@
     // all done! :-)
     $db->close();
     
-    echo $json->encode( $return );
+    echo enano_json_encode( $return );
     
     exit;
   }
@@ -97,21 +96,43 @@
       echo PageUtils::checkusername($_GET['name']);
       break;
     case "getsource":
+      header('Content-type: application/json');
       $password = ( isset($_GET['pagepass']) ) ? $_GET['pagepass'] : false;
       $page = new PageProcessor($paths->page_id, $paths->namespace);
       $page->password = $password;
       if ( $src = $page->fetch_source() )
       {
-        echo $src;
+        $allowed = true;
       }
       else if ( $src !== false )
       {
-        echo '';
+        $allowed = true;
+        $src = '';
       }
       else
       {
-        echo 'err_access_denied';
+        $allowed = false;
+        $src = '';
       }
+      
+      $auth_edit = ( $session->get_permissions('edit_page') && ( $session->get_permissions('even_when_protected') || !$paths->page_protected ) );
+      
+      $return = array(
+          'mode' => 'editor',
+          'src' => $src,
+          'auth_view_source' => $allowed,
+          'auth_edit' => $auth_edit,
+          'time' => time(),
+          'require_captcha' => false,
+        );
+      
+      if ( $auth_edit && !$session->user_logged_in && getConfig('guest_edit_require_captcha') == '1' )
+      {
+        $return['require_captcha'] = true;
+        $return['captcha_id'] = $session->make_captcha();
+      }
+      
+      echo enano_json_encode($return);
       break;
     case "getpage":
       // echo PageUtils::getpage($paths->page, false, ( (isset($_GET['oldid'])) ? $_GET['oldid'] : false ));
@@ -136,6 +157,110 @@
       {
         echo '<p>Error saving the page: '.$e.'</p>';
       }
+      break;
+    case "savepage_json":
+      header('Content-type: application/json');
+      if ( !isset($_POST['r']) )
+        die('Invalid request');
+      
+      $request = enano_json_decode($_POST['r']);
+      if ( !isset($request['src']) || !isset($request['summary']) || !isset($request['minor_edit']) || !isset($request['time']) )
+        die('Invalid request');
+      
+      $time = intval($request['time']);
+      
+      // Verify that no edits have been made since the editor was requested
+      $q = $db->sql_query('SELECT time_id, author FROM ' . table_prefix . "logs WHERE log_type = 'page' AND action = 'edit' AND page_id = '{$paths->page_id}' AND namespace = '{$paths->namespace}' ORDER BY time_id DESC LIMIT 1;");
+      if ( !$q )
+        $db->die_json();
+      
+      $row = $db->fetchrow();
+      $db->free_result();
+      
+      if ( $row['time_id'] > $time )
+      {
+        $return = array(
+          'mode' => 'obsolete',
+          'author' => $row['author'],
+          'date_string' => date('d M Y h:i a', $row['time_id']),
+          'time' => $row['time_id'] // time() ???
+          );
+        echo enano_json_encode($return);
+        break;
+      }
+      
+      // Verify captcha, if needed
+      if ( !$session->user_logged_in && getConfig('guest_edit_require_captcha') == '1' )
+      {
+        if ( !isset($request['captcha_id']) || !isset($request['captcha_code']) )
+        {
+          die('Invalid request, need captcha metadata');
+        }
+        $code_correct = strtolower($session->get_captcha($request['captcha_id']));
+        $code_input = strtolower($request['captcha_code']);
+        if ( $code_correct !== $code_input )
+        {
+          $return = array(
+            'mode' => 'errors',
+            'errors' => array($lang->get('editor_err_captcha_wrong')),
+            'new_captcha' => $session->make_captcha()
+          );
+          echo enano_json_encode($return);
+          break;
+        }
+      }
+      
+      // Verification complete. Start the PageProcessor and let it do the dirty work for us.
+      $page = new PageProcessor($paths->page_id, $paths->namespace);
+      if ( $page->update_page($request['src'], $request['summary'], ( $request['minor_edit'] == 1 )) )
+      {
+        $return = array(
+            'mode' => 'success'
+          );
+      }
+      else
+      {
+        $errors = array();
+        while ( $err = $page->pop_error() )
+        {
+          $errors[] = $err;
+        }
+        $return = array(
+          'mode' => 'errors',
+          'errors' => array_values($errors)
+          );
+        if ( !$session->user_logged_in && getConfig('guest_edit_require_captcha') == '1' )
+        {
+          $return['new_captcha'] = $session->make_captcha();
+        }
+      }
+      
+      echo enano_json_encode($return);
+      
+      break;
+    case "diff_cur":
+      
+      // Lie about our content type to fool ad scripts
+      header('Content-type: application/xhtml+xml');
+      
+      if ( !isset($_POST['text']) )
+        die('Invalid request');
+      
+      $page = new PageProcessor($paths->page_id, $paths->namespace);
+      if ( !($src = $page->fetch_source()) )
+      {
+        die('Access denied');
+      }
+      
+      $diff = RenderMan::diff($src, $_POST['text']);
+      if ( $diff == '<table class="diff"></table>' )
+      {
+        $diff = '<p>' . $lang->get('editor_msg_diff_empty') . '</p>';
+      }
+      
+      echo '<div class="info-box">' . $lang->get('editor_msg_diff') . '</div>';
+      echo $diff;
+      
       break;
     case "protect":
       echo PageUtils::protect($paths->page_id, $paths->namespace, (int)$_POST['level'], $_POST['reason']);
@@ -285,7 +410,6 @@
       die('GOOD');
       break;
     case 'get_tags':
-      $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
       
       $ret = array('tags' => array(), 'user_level' => $session->user_level, 'can_add' => $session->get_permissions('tag_create'));
       $q = $db->sql_query('SELECT t.tag_id, t.tag_name, pg.pg_target IS NOT NULL AS used_in_acl, t.user_id FROM '.table_prefix.'tags AS t
@@ -321,11 +445,10 @@
         );
       }
       
-      echo $json->encode($ret);
+      echo enano_json_encode($ret);
       
       break;
     case 'addtag':
-      $json = new Services_JSON(SERVICES_JSON_LOOSE_TYPE);
       $resp = array(
           'success' => false,
           'error' => 'No error',
@@ -337,7 +460,7 @@
       if ( !$session->get_permissions('tag_create') )
       {
         $resp['error'] = 'You are not permitted to tag pages.';
-        die($json->encode($resp));
+        die(enano_json_encode($resp));
       }
       
       // sanitize the tag name
@@ -347,7 +470,7 @@
       if ( strlen($tag) < 2 )
       {
         $resp['error'] = 'Tags must consist of at least 2 alphanumeric characters.';
-        die($json->encode($resp));
+        die(enano_json_encode($resp));
       }
       
       // check if tag is already on page
@@ -357,7 +480,7 @@
       if ( $db->numrows() > 0 )
       {
         $resp['error'] = 'This page already has this tag.';
-        die($json->encode($resp));
+        die(enano_json_encode($resp));
       }
       $db->free_result();
       
@@ -369,7 +492,7 @@
       if ( $db->numrows() > 0 && !$can_edit_acl )
       {
         $resp['error'] = 'This tag is used in an ACL page group, and thus can\'t be added to a page by people without administrator privileges.';
-        die($json->encode($resp));
+        die(enano_json_encode($resp));
       }
       $resp['in_acl'] = ( $db->numrows() > 0 );
       $db->free_result();
@@ -383,7 +506,7 @@
       $resp['tag'] = $tag;
       $resp['tag_id'] = $db->insert_id();
       
-      echo $json->encode($resp);
+      echo enano_json_encode($resp);
       break;
     case 'deltag':
       

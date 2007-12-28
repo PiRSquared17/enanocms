@@ -255,7 +255,7 @@ if ( !KILL_SWITCH )
 {
   var script = document.createElement('script');
   script.type="text/javascript";
-  script.src=scriptPath+"/includes/clientside/tinymce/tiny_mce_src.js";
+  script.src=scriptPath+"/includes/clientside/tinymce/tiny_mce.js";
   head.appendChild(script);
 }
 
@@ -277,6 +277,7 @@ var thefiles = [
   'toolbar.js',
   'windows.js',
   'rijndael.js',
+  'l10n.js',
   'template-compiler.js',
   'acl.js',
   'comments.js',

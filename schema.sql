@@ -105,6 +105,9 @@ CREATE TABLE {{TABLE_PREFIX}}users(
   temp_password text,
   temp_password_time int(12) NOT NULL DEFAULT 0,
   user_coppa tinyint(1) NOT NULL DEFAULT 0,
+  user_lang smallint(5) NOT NULL,
+  user_has_avatar tinyint(1) NOT NULL,
+  avatar_type ENUM('jpg', 'png', 'gif') NOT NULL,
   PRIMARY KEY  (user_id)
 ) CHARACTER SET `utf8` COLLATE `utf8_bin`;
 
@@ -247,6 +250,38 @@ CREATE TABLE {{TABLE_PREFIX}}tags(
   PRIMARY KEY ( tag_id )
 ) CHARACTER SET `utf8` COLLATE `utf8_bin`;
 
+-- Added in 1.1.1
+
+CREATE TABLE {{TABLE_PREFIX}}lockout(
+  id int(12) NOT NULL auto_increment,
+  ipaddr varchar(40) NOT NULL,
+  action ENUM('credential', 'level') NOT NULL DEFAULT 'credential',
+  timestamp int(12) NOT NULL DEFAULT 0,
+  PRIMARY KEY ( id )
+) CHARACTER SET `utf8`;
+
+-- Added in 1.1.1
+
+CREATE TABLE {{TABLE_PREFIX}}language(
+  lang_id smallint(5) NOT NULL auto_increment,
+  lang_code varchar(16) NOT NULL,
+  lang_name_default varchar(64) NOT NULL,
+  lang_name_native varchar(64) NOT NULL,
+  last_changed int(12) NOT NULL DEFAULT 0,
+  PRIMARY KEY ( lang_id )
+) CHARACTER SET `utf8`;
+
+-- Added in 1.1.1
+
+CREATE TABLE {{TABLE_PREFIX}}language_strings(
+  string_id bigint(15) NOT NULL auto_increment,
+  lang_id smallint(5) NOT NULL,
+  string_category varchar(32) NOT NULL,
+  string_name varchar(64) NOT NULL,
+  string_content longtext NOT NULL,
+  PRIMARY KEY ( string_id )
+);
+
 INSERT INTO {{TABLE_PREFIX}}config(config_name, config_value) VALUES
   ('site_name', '{{SITE_NAME}}'),
   ('main_page', 'Main_Page'),
@@ -276,7 +311,7 @@ INSERT INTO {{TABLE_PREFIX}}config(config_name, config_value) VALUES
   ('powered_btn', '1');
 
 INSERT INTO {{TABLE_PREFIX}}page_text(page_id, namespace, page_text, char_tag) VALUES
-  ('Main_Page', 'Article', '=== Enano has been successfully installed and is working. ===\n\nIf you can see this message, it means that you\'ve finished the Enano setup process and are ready to start building your website. Congratulations!\n\nTo edit this front page, click the Log In button to the left, enter the credentials you provided during the installation, and click the Edit This Page button that appears on the blue toolbar just above this text. You can also [http://docs.enanocms.org/Help:2.4 learn more] about editing pages.\n\nTo create more pages, use the Create a Page button to the left. If you enabled wiki mode, you don\'t have to log in first, however your IP address will be shown in the page history.\n\nVisit the [http://docs.enanocms.org/Help:Contents Enano documentation project website] to learn more about administering your site effectively and keeping things secure.', '');
+  ('Main_Page', 'Article', '=== Enano has been successfully installed and is working. ===\n\nIf you can see this message, it means that you\'ve finished the Enano setup process and are ready to start building your website. Congratulations!\n\nTo edit this front page, click the Log In button to the left, enter the credentials you provided during the installation, and click the Edit This Page button that appears on the blue toolbar just above this text. You can also [http://docs.enanocms.org/Help:2.4 learn more] about editing pages.\n\nTo create more pages, use the Create a Page button to the left. If you enabled wiki mode, you don\'t have to log in first, however your IP address will be shown in the page history.\n\nVisit the [http://docs.enanocms.org/Help:Contents Enano documentation project website] to learn more about administering your site effectively and keeping things secure.\n\n\'\'\'NOTE:\'\'\' You\'ve just installed an unstable version of Enano. This release is completely unsupported and may contain security issues or serious usability bugs. You should not use this release on a production website. The Enano team will not provide any type of support at all for this experimental release.', '');
 
 INSERT INTO {{TABLE_PREFIX}}pages(page_order, name, urlname, namespace, special, visible, comments_on, protected, delvotes, delvote_ips) VALUES
   (NULL, 'Main Page', 'Main_Page', 'Article', 0, 1, 1, 1, 0, '');
@@ -298,13 +333,14 @@ INSERT INTO {{TABLE_PREFIX}}groups(group_id,group_name,group_type,system_group) 
 
 INSERT INTO {{TABLE_PREFIX}}group_members(group_id,user_id,is_mod) VALUES(2, 2, 1);
 
-INSERT INTO {{TABLE_PREFIX}}acl(target_type,target_id,page_id,namespace,rules) VALUES(1,2,NULL,NULL,'read=4;post_comments=4;edit_comments=4;edit_page=4;view_source=4;mod_comments=4;history_view=4;history_rollback=4;history_rollback_extra=4;protect=4;rename=4;clear_logs=4;vote_delete=4;vote_reset=4;delete_page=4;tag_create=4;tag_delete_own=4;tag_delete_other=4;set_wiki_mode=4;password_set=4;password_reset=4;mod_misc=4;edit_cat=4;even_when_protected=4;upload_files=4;upload_new_version=4;create_page=4;php_in_pages={{ADMIN_EMBED_PHP}};edit_acl=4;'),
+INSERT INTO {{TABLE_PREFIX}}acl(target_type,target_id,page_id,namespace,rules) VALUES
+  (1,2,NULL,NULL,'read=4;post_comments=4;edit_comments=4;edit_page=4;view_source=4;mod_comments=4;history_view=4;history_rollback=4;history_rollback_extra=4;protect=4;rename=4;clear_logs=4;vote_delete=4;vote_reset=4;delete_page=4;tag_create=4;tag_delete_own=4;tag_delete_other=4;set_wiki_mode=4;password_set=4;password_reset=4;mod_misc=4;edit_cat=4;even_when_protected=4;upload_files=4;upload_new_version=4;create_page=4;php_in_pages={{ADMIN_EMBED_PHP}};edit_acl=4;'),
   (1,3,NULL,NULL,'read=4;post_comments=4;edit_comments=4;edit_page=4;view_source=4;mod_comments=4;history_view=4;history_rollback=4;history_rollback_extra=4;protect=4;rename=3;clear_logs=2;vote_delete=4;vote_reset=4;delete_page=4;set_wiki_mode=2;password_set=2;password_reset=2;mod_misc=2;edit_cat=4;even_when_protected=4;upload_files=2;upload_new_version=3;create_page=3;php_in_pages=2;edit_acl=2;');
 
 INSERT INTO {{TABLE_PREFIX}}sidebar(item_id, item_order, sidebar_id, block_name, block_type, block_content) VALUES
-  (1, 1, 1, 'Navigation', 1, '[[Main Page|Home]]'),
-  (2, 2, 1, 'Tools', 1, '[[$NS_SPECIAL$CreatePage|Create a page]]\n[[$NS_SPECIAL$UploadFile|Upload file]]\n[[$NS_SPECIAL$SpecialPages|Special pages]]\n{if auth_admin}\n[[$NS_SPECIAL$EditSidebar|Edit the sidebar]]\n$ADMIN_LINK$\n{/if}'),
-  (3, 3, 1, '$USERNAME$', 1, '[[$NS_USER$$USERNAME$|User page]]\n[[$NS_SPECIAL$Contributions/$USERNAME$|My Contributions]]\n{if user_logged_in}\n[[$NS_SPECIAL$Preferences|Preferences]]\n[[$NS_SPECIAL$PrivateMessages|Private messages]]\n[[$NS_SPECIAL$Usergroups|Group control panel]]\n$THEME_LINK$\n{/if}\n{if user_logged_in}\n$LOGOUT_LINK$\n{else}\n[[$NS_SPECIAL$Register|Create an account]]\n$LOGIN_LINK$\n[[$NS_SPECIAL$Login/$NS_SPECIAL$PrivateMessages|Private messages]]\n{/if}'),
-  (4, 4, 1, 'Search', 1, '<div class="slideblock2" style="padding: 0px;"><form action="$CONTENTPATH$$NS_SPECIAL$Search" method="get" style="padding: 0; margin: 0;"><p><input type="hidden" name="title" value="$NS_SPECIAL$Search" />$INPUT_AUTH$<input name="q" alt="Search box" type="text" size="10" style="width: 70%" /> <input type="submit" value="Go" style="width: 20%" /></p></form></div>'),
-  (5, 2, 2, 'Links', 4, 'Links');
+  (1, 1, 1, '{lang:sidebar_title_navigation}', 1, '[[Main_Page|{lang:sidebar_btn_home}]]'),
+  (2, 2, 1, '{lang:sidebar_title_tools}', 1, '[[$NS_SPECIAL$CreatePage|{lang:sidebar_btn_createpage}]]\n[[$NS_SPECIAL$UploadFile|{lang:sidebar_btn_uploadfile}]]\n[[$NS_SPECIAL$SpecialPages|{lang:sidebar_btn_specialpages}]]\n{if auth_admin}\n$ADMIN_LINK$\n[[$NS_SPECIAL$EditSidebar|{lang:sidebar_btn_editsidebar}]]\n{/if}'),
+  (3, 3, 1, '$USERNAME$', 1, '[[$NS_USER$$USERNAME$|{lang:sidebar_btn_userpage}]]\n[[$NS_SPECIAL$Contributions/$USERNAME$|{lang:sidebar_btn_mycontribs}]]\n{if user_logged_in}\n[[$NS_SPECIAL$Preferences|{lang:sidebar_btn_preferences}]]\n[[$NS_SPECIAL$PrivateMessages|{lang:sidebar_btn_privatemessages}]]\n[[$NS_SPECIAL$Usergroups|{lang:sidebar_btn_groupcp}]]\n$THEME_LINK$\n{/if}\n{if user_logged_in}\n$LOGOUT_LINK$\n{else}\n[[$NS_SPECIAL$Register|{lang:sidebar_btn_register}]]\n$LOGIN_LINK$\n[[$NS_SPECIAL$Login/$NS_SPECIAL$PrivateMessages|{lang:sidebar_btn_privatemessages}]]\n{/if}'),
+  (4, 4, 1, '{lang:sidebar_title_search}', 1, '<div class="slideblock2" style="padding: 0px;"><form action="$CONTENTPATH$$NS_SPECIAL$Search" method="get" style="padding: 0; margin: 0;"><p><input type="hidden" name="title" value="$NS_SPECIAL$Search" />$INPUT_AUTH$<input name="q" alt="Search box" type="text" size="10" style="width: 70%" /> <input type="submit" value="{lang:sidebar_btn_search_go}" style="width: 20%" /></p></form></div>'),
+  (5, 2, 2, '{lang:sidebar_title_links}', 4, 'Links');
 

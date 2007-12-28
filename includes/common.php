@@ -2,7 +2,7 @@
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0.3 (Dyrad)
+ * Version 1.1.1
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -37,7 +37,7 @@ if ( isset($_REQUEST['GLOBALS']) )
 // be the expected output of enano_version(), which will always be in the
 // format of 1.0.2, 1.0.2a1, 1.0.2b1, 1.0.2RC1
 // You'll want to change this for custom distributions.
-$version = '1.0.3';
+$version = '1.1.1';
 
 /**
  * Returns a floating-point number with the current UNIX timestamp in microseconds. Defined very early because we gotta call it
@@ -45,10 +45,13 @@ $version = '1.0.3';
  * @return float
  */
 
-function microtime_float()
+if ( !function_exists('microtime_float') )
 {
-  list($usec, $sec) = explode(" ", microtime());
-  return ((float)$usec + (float)$sec);
+  function microtime_float()
+  {
+    list($usec, $sec) = explode(" ", microtime());
+    return ((float)$usec + (float)$sec);
+  }
 }
 
 // Determine starting time
@@ -105,6 +108,7 @@ require_once(ENANO_ROOT.'/includes/paths.php');
 require_once(ENANO_ROOT.'/includes/sessions.php');
 require_once(ENANO_ROOT.'/includes/template.php');
 require_once(ENANO_ROOT.'/includes/plugins.php');
+require_once(ENANO_ROOT.'/includes/lang.php');
 require_once(ENANO_ROOT.'/includes/comment.php');
 require_once(ENANO_ROOT.'/includes/wikiformat.php');
 require_once(ENANO_ROOT.'/includes/diff.php');
@@ -116,6 +120,7 @@ require_once(ENANO_ROOT.'/includes/rijndael.php');
 require_once(ENANO_ROOT.'/includes/email.php');
 require_once(ENANO_ROOT.'/includes/search.php');
 require_once(ENANO_ROOT.'/includes/json.php');
+require_once(ENANO_ROOT.'/includes/json2.php');
 require_once(ENANO_ROOT.'/includes/wikiengine/Tables.php');
 require_once(ENANO_ROOT.'/includes/pageprocess.php');
 require_once(ENANO_ROOT.'/includes/tagcloud.php');
@@ -134,6 +139,9 @@ global $enano_config; // A global used to cache config information without makin
 
 // Jim Tucek's e-mail encryption code                      
 global $email;
+
+// Language object
+global $lang;
 
 // Because Enano sends out complete URLs in several occasions, we need to know what hostname the user is requesting the page from.
 // In future versions we may include a fallback "safety" host to use, but that's too much to worry about now
@@ -236,6 +244,27 @@ else if ( $ks = getConfig('aes_block_size') )
   }
 }
 
+// Is there no default language?
+if ( getConfig('lang_default') === false )
+{
+  $q = $db->sql_query('SELECT lang_id FROM '.table_prefix.'language LIMIT 1;');
+  if ( !$q )
+    $db->_die('common.php - setting default language');
+  if ( $db->numrows() < 1 && !defined('ENANO_ALLOW_LOAD_NOLANG') )
+  {
+    grinding_halt('No languages', '<p>There are no languages installed on this site.</p>
+        <p>If you are the website administrator, you may install a language by writing and executing a simple PHP script to install it:</p>
+        <pre>
+&lt;?php
+define("ENANO_ALLOW_LOAD_NOLANG", 1);
+$_GET["title"] = "langinstall";
+require("includes/common.php");
+install_language("eng", "English", "English", ENANO_ROOT . "/language/english/enano.json");</pre>');
+  }
+  $row = $db->fetchrow();
+  setConfig('default_language', $row['lang_id']);
+}
+
 // Our list of tables included in Enano
 $system_table_list = Array(
     table_prefix.'categories',
@@ -320,6 +349,14 @@ if ( !defined('IN_ENANO_INSTALL') )
 
   // All checks passed! Start the main components up.  
   $session->start();
+  
+  // This is where plugins will want to add pages from 1.1.x on out. You can still add pages at base_classes_initted but the titles won't be localized.
+  $code = $plugins->setHook('session_started');
+  foreach ( $code as $cmd )
+  {
+    eval($cmd);
+  }
+  
   $paths->init();
   
   // We're ready for whatever life throws us now.
@@ -354,10 +391,8 @@ if ( !defined('IN_ENANO_INSTALL') )
     $template->site_disabled = true;
   }
   
-  // A better name for this hook would be common_post. At this point
-  // all of Enano is fully initialized and running and you're ready
-  // to do whatever you want.
-  $code = $plugins->setHook('session_started');
+  // At this point all of Enano is fully initialized and running and you're ready to do whatever you want.
+  $code = $plugins->setHook('common_post');
   foreach ( $code as $cmd )
   {
     eval($cmd);

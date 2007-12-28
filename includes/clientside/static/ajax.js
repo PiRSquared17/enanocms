@@ -2,7 +2,22 @@
  * AJAX applets
  */
  
-function ajaxGet(uri, f) {
+function ajaxGet(uri, f, call_editor_safe) {
+  // Is the editor open?
+  if ( editor_open && !call_editor_safe )
+  {
+    // Make sure the user is willing to close the editor
+    var conf = confirm($lang.get('editor_msg_confirm_ajax'));
+    if ( !conf )
+    {
+      // Kill off any "loading" windows, etc. and cancel the request
+      unsetAjaxLoading();
+      return false;
+    }
+    // The user allowed the editor to be closed. Reset flags and knock out the on-close confirmation.
+    editor_open = false;
+    enableUnload();
+  }
   if (window.XMLHttpRequest) {
     ajax = new XMLHttpRequest();
   } else {
@@ -19,7 +34,22 @@ function ajaxGet(uri, f) {
   ajax.send(null);
 }
 
-function ajaxPost(uri, parms, f) {
+function ajaxPost(uri, parms, f, call_editor_safe) {
+  // Is the editor open?
+  if ( editor_open && !call_editor_safe )
+  {
+    // Make sure the user is willing to close the editor
+    var conf = confirm($lang.get('editor_msg_confirm_ajax'));
+    if ( !conf )
+    {
+      // Kill off any "loading" windows, etc. and cancel the request
+      unsetAjaxLoading();
+      return false;
+    }
+    // The user allowed the editor to be closed. Reset flags and knock out the on-close confirmation.
+    editor_open = false;
+    enableUnload();
+  }
   if (window.XMLHttpRequest) {
     ajax = new XMLHttpRequest();
   } else {
@@ -134,142 +164,12 @@ function ajaxAltEscape(text)
   return text;
 }
 
-// Page editor
-
-function ajaxEditor()
-{
-  // IE <6 pseudo-compatibility
-  if ( KILL_SWITCH )
-    return true;
-  setAjaxLoading();
-  ajaxGet(stdAjaxPrefix+'&_mode=getsource', function() {
-      if(ajax.readyState == 4) {
-        unsetAjaxLoading();
-        if(edit_open) {
-          c=confirm('Do you really want to revert your changes?');
-          if(!c) return;
-        }
-        edit_open = true;
-        selectButtonMajor('article');
-        selectButtonMinor('edit');
-        if(in_array('ajaxEditArea', grippied_textareas))
-        {
-          // Allow the textarea grippifier to re-create the resizer control on the textarea
-          grippied_textareas.pop(in_array('ajaxEditArea', grippied_textareas));
-        }
-        disableUnload('If you do, any changes that you have made to this page will be lost.');
-        var switcher = ( readCookie('enano_editor_mode') == 'tinymce' ) ?
-                        '<a href="#" onclick="setEditorText(); return false;">wikitext editor</a>  |  graphical editor' :
-                        'wikitext editor  |  <a href="#" onclick="setEditorMCE(); return false;">graphical editor</a>' ;
-        document.getElementById('ajaxEditContainer').innerHTML = '\
-        <div id="mdgPreviewContainer"></div> \
-        <span id="switcher">' + switcher + '</span><br />\
-        <form name="mdgAjaxEditor" method="get" action="#" onsubmit="ajaxSavePage(); return false;">\
-        <textarea id="ajaxEditArea" rows="20" cols="60" style="display: block; margin: 1em 0 1em 1em; width: 96.5%;">'+ajax.responseText+'</textarea><br />\
-          Edit summary: <input id="ajaxEditSummary" size="40" /><br />\
-          <input id="ajaxEditMinor" name="minor" type="checkbox" /> <label for="ajaxEditMinor">This is a minor edit</label><br />\
-          <a href="#" onclick="void(ajaxSavePage()); return false;">save changes</a>  |  <a href="#" onclick="void(ajaxShowPreview()); return false;">preview changes</a>  |  <a href="#" onclick="void(ajaxEditor()); return false;">revert changes</a>  |  <a href="#" onclick="void(ajaxDiscard()); return false;">discard changes</a>\
-          <br />\
-          '+editNotice+'\
-        </form>';
-        // initTextareas();
-        if(readCookie('enano_editor_mode') == 'tinymce')
-        {
-          $('ajaxEditArea').switchToMCE();
-        }
-      }
-  });
-}
-
-function setEditorMCE()
-{
-  $('ajaxEditArea').switchToMCE();
-  createCookie('enano_editor_mode', 'tinymce', 365);
-  $('switcher').object.innerHTML = '<a href="#" onclick="setEditorText(); return false;">wikitext editor</a>  |  graphical editor';
-}
-
-function setEditorText()
-{
-  $('ajaxEditArea').destroyMCE();
-  createCookie('enano_editor_mode', 'text', 365);
-  $('switcher').object.innerHTML = 'wikitext editor  |  <a href="#" onclick="setEditorMCE(); return false;">graphical editor</a>';
-}
-
-function ajaxViewSource()
-{
-  // IE <6 pseudo-compatibility
-  if ( KILL_SWITCH )
-    return true;
-  setAjaxLoading();
-  ajaxGet(stdAjaxPrefix+'&_mode=getsource', function() {
-      if(ajax.readyState == 4) {
-        unsetAjaxLoading();
-        if(edit_open) {
-          c=confirm('Do you really want to revert your changes?');
-          if(!c) return;
-        }
-        edit_open = true;
-        selectButtonMajor('article');
-        selectButtonMinor('edit');
-        if(in_array('ajaxEditArea', grippied_textareas))
-        {
-          // Allow the textarea grippifier to re-create the resizer control on the textarea
-          grippied_textareas.pop(in_array('ajaxEditArea', grippied_textareas));
-        }
-        document.getElementById('ajaxEditContainer').innerHTML = '\
-          <form method="get" action="#" onsubmit="ajaxSavePage(); return false;">\
-            <textarea readonly="readonly" id="ajaxEditArea" rows="20" cols="60" style="display: block; margin: 1em 0 1em 1em; width: 96.5%;">'+ajax.responseText+'</textarea><br />\
-            <a href="#" onclick="void(ajaxReset()); return false;">close viewer</a>\
-          </form>';
-        initTextareas();
-      }
-  });
-}
-
-function ajaxShowPreview()
-{
-  // IE <6 pseudo-compatibility
-  if ( KILL_SWITCH )
-    return true;
-  goBusy('Loading preview...');
-  var text = ajaxEscape($('ajaxEditArea').getContent());
-  if(document.mdgAjaxEditor.minor.checked) minor='&minor';
-  else minor='';
-  ajaxPost(stdAjaxPrefix+'&_mode=preview', 'summary='+document.getElementById('ajaxEditSummary').value+minor+'&text='+text, function() {
-    if(ajax.readyState == 4) {
-      unBusy();
-      edit_open = false;
-      document.getElementById('mdgPreviewContainer').innerHTML = ajax.responseText;
-    }
-  });
-}
-
-function ajaxSavePage()
-{
-  // IE <6 pseudo-compatibility
-  if ( KILL_SWITCH )
-    return true;
-  //goBusy('Saving page...');
-  var text = ajaxEscape($('ajaxEditArea').getContent());
-  if(document.mdgAjaxEditor.minor.checked) minor='&minor';
-  else minor='';
-  ajaxPost(stdAjaxPrefix+'&_mode=savepage', 'summary='+document.getElementById('ajaxEditSummary').value+minor+'&text='+text, function() {
-    if(ajax.readyState == 4) {
-      unBusy();
-      edit_open = false;
-      document.getElementById('ajaxEditContainer').innerHTML = ajax.responseText;
-      enableUnload();
-      unselectAllButtonsMinor();
-    }
-  });
-}
-
 function ajaxDiscard()
 {
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  c = confirm('Do you really want to discard your changes?');
+  c = confirm($lang.get('editor_msg_discard_confirm'));
   if(!c) return;
   ajaxReset();
 }
@@ -279,12 +179,14 @@ function ajaxReset()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
+  var ns_id = strToPageID(title);
+  if ( ns_id[1] == 'Special' || ns_id[1] == 'Admin' )
+    return false;
   enableUnload();
   setAjaxLoading();
   ajaxGet(stdAjaxPrefix+'&_mode=getpage&noheaders', function() {
     if(ajax.readyState == 4) {
       unsetAjaxLoading();
-      edit_open = false;
       document.getElementById('ajaxEditContainer').innerHTML = ajax.responseText;
       selectButtonMajor('article');
       unselectAllButtonsMinor();
@@ -301,7 +203,7 @@ function ajaxProtect(l) {
   if(shift) {
     r = 'NO_REASON';
   } else {
-    r = prompt('Reason for (un)protecting:');
+    r = prompt($lang.get('ajax_protect_prompt_reason'));
     if(!r || r=='') return;
   }
   setAjaxLoading();
@@ -315,7 +217,7 @@ function ajaxProtect(l) {
       if(ajax.responseText != 'good')
         alert(ajax.responseText);
     }
-  });
+  }, true);
 }
 
 function ajaxRename()
@@ -323,7 +225,7 @@ function ajaxRename()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  r = prompt('What title should this page be renamed to?\nNote: This does not and will never change the URL of this page, that must be done from the admin panel.');
+  r = prompt($lang.get('ajax_rename_prompt'));
   if(!r || r=='') return;
   setAjaxLoading();
   ajaxPost(stdAjaxPrefix+'&_mode=rename', 'newtitle='+ajaxEscape(r), function() {
@@ -331,7 +233,7 @@ function ajaxRename()
       unsetAjaxLoading();
       alert(ajax.responseText);
     }
-  });
+  }, true);
 }
 
 function ajaxMakePage()
@@ -353,12 +255,12 @@ function ajaxDeletePage()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  var reason = prompt('Please enter your reason for deleting this page.');
+  var reason = prompt($lang.get('ajax_delete_prompt_reason'));
   if ( !reason || reason == '' )
   {
     return false;
   }
-  c = confirm('You are about to REVERSIBLY delete this page. Do you REALLY want to do this?\n\n(Comments and categorization data, as well as any attached files, will be permanently lost)');
+  c = confirm($lang.get('ajax_delete_confirm'));
   if(!c)
   {
     return;
@@ -378,7 +280,7 @@ function ajaxDelVote()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  c = confirm('Are you sure that you want to vote that this page be deleted?');
+  c = confirm($lang.get('ajax_delvote_confirm'));
   if(!c) return;
   setAjaxLoading();
   ajaxGet(stdAjaxPrefix+'&_mode=delvote', function() {
@@ -386,7 +288,7 @@ function ajaxDelVote()
       unsetAjaxLoading();
       alert(ajax.responseText);
     }
-  });
+  }, true);
 }
 
 function ajaxResetDelVotes()
@@ -394,7 +296,7 @@ function ajaxResetDelVotes()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  c = confirm('This will reset the number of votes against this page to zero. Do you really want to do this?');
+  c = confirm($lang.get('ajax_delvote_reset_confirm'));
   if(!c) return;
   setAjaxLoading();
   ajaxGet(stdAjaxPrefix+'&_mode=resetdelvotes', function() {
@@ -408,7 +310,7 @@ function ajaxResetDelVotes()
         setTimeout("document.getElementById('mdgDeleteVoteNoticeBox').style.display = 'none';", 1000);
       }
     }
-  });
+  }, true);
 }
 
 function ajaxSetWikiMode(val) {
@@ -532,9 +434,9 @@ function ajaxClearLogs()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  c = confirm('You are about to DESTROY all log entries for this page. As opposed to (example) deleting this page, this action is completely IRREVERSIBLE and should not be used except in dire circumstances. Do you REALLY want to do this?');
+  c = confirm($lang.get('ajax_clearlogs_confirm'));
   if(!c) return;
-  c = confirm('You\'re ABSOLUTELY sure???');
+  c = confirm($lang.get('ajax_clearlogs_confirm_nag'));
   if(!c) return;
   setAjaxLoading();
   ajaxGet(stdAjaxPrefix+'&_mode=flushlogs', function() {
@@ -638,13 +540,13 @@ function ajaxChangeStyle()
   if ( KILL_SWITCH )
     return true;
   var inner_html = '';
-  inner_html += '<p><label>Theme: ';
+  inner_html += '<p><label>' + $lang.get('ajax_changestyle_lbl_theme') + ' ';
   inner_html += '  <select id="chtheme_sel_theme" onchange="ajaxGetStyles(this.value);">';
-  inner_html += '    <option value="_blank" selected="selected">[Select]</option>';
+  inner_html += '    <option value="_blank" selected="selected">' + $lang.get('ajax_changestyle_select') + '</option>';
   inner_html +=      ENANO_THEME_LIST;
   inner_html += '  </select>';
   inner_html += '</label></p>';
-  var chtheme_mb = new messagebox(MB_OKCANCEL|MB_ICONQUESTION, 'Change your theme', inner_html);
+  var chtheme_mb = new messagebox(MB_OKCANCEL|MB_ICONQUESTION, $lang.get('ajax_changestyle_title'), inner_html);
   chtheme_mb.onbeforeclick['OK'] = ajaxChangeStyleComplete;
 }
 
@@ -689,7 +591,7 @@ function ajaxGetStyles(id)
         var p_parent = document.createElement('p');
         var label  = document.createElement('label');
         p_parent.id = 'chtheme_sel_style_parent';
-        label.appendChild(document.createTextNode('Style: '));
+        label.appendChild(document.createTextNode($lang.get('ajax_changestyle_lbl_style') + ' '));
         var select = document.createElement('select');
         select.id = 'chtheme_sel_style';
         for ( var i in options )
@@ -706,7 +608,7 @@ function ajaxGetStyles(id)
         kid.appendChild(p_parent);
         
       }
-    });
+    }, true);
 }
 
 function ajaxChangeStyleComplete()
@@ -718,7 +620,7 @@ function ajaxChangeStyleComplete()
   var style = $('chtheme_sel_style');
   if ( !theme.object || !style.object )
   {
-    alert('Please select a theme from the list.');
+    alert($lang.get('ajax_changestyle_pleaseselect_theme'));
     return true;
   }
   var theme_id = theme.object.value;
@@ -742,7 +644,7 @@ function ajaxChangeStyleComplete()
       {
         if ( ajax.responseText == 'GOOD' )
         {
-          var c = confirm('Your theme preference has been changed.\nWould you like to reload the page now to see the changes?');
+          var c = confirm($lang.get('ajax_changestyle_success'));
           if ( c )
             window.location.reload();
         }
@@ -751,7 +653,7 @@ function ajaxChangeStyleComplete()
           alert('Error occurred during attempt to change theme:\n' + ajax.responseText);
         }
       }
-    });
+    }, true);
   
   return false;
   
@@ -841,8 +743,7 @@ function ajaxSetPassword()
       {
         alert(ajax.responseText);
       }
-    }
-  );
+    }, true);
 }
 
 function ajaxStartLogin()
@@ -951,7 +852,7 @@ function ajaxDisableEmbeddedPHP()
   // IE <6 pseudo-compatibility
   if ( KILL_SWITCH )
     return true;
-  if ( !confirm('Are you really sure you want to do this? Some pages might not function if this emergency-only feature is activated.') )
+  if ( !confirm($lang.get('ajax_killphp_confirm')) )
     return false;
   var $killdiv = $dynano('php_killer');
   if ( !$killdiv.object )
@@ -972,7 +873,7 @@ function ajaxDisableEmbeddedPHP()
           var newdiv = document.createElement('div');
           // newdiv.style = $killdiv.object.style;
           newdiv.className = $killdiv.object.className;
-          newdiv.innerHTML = '<img alt="Success" src="' + scriptPath + '/images/error.png" /><br />Embedded PHP in pages has been disabled.';
+          newdiv.innerHTML = '<img alt="Success" src="' + scriptPath + '/images/error.png" /><br />' + $lang.get('ajax_killphp_success');
           $killdiv.object.parentNode.appendChild(newdiv);
           $killdiv.object.parentNode.removeChild($killdiv.object);
         }
@@ -1009,14 +910,14 @@ function ajaxCatToTag()
         if ( !catbox )
           return false;
         var linkbox = catbox.parentNode.firstChild.firstChild.nextSibling;
-        linkbox.firstChild.nodeValue = 'show page categorization';
+        linkbox.firstChild.nodeValue = $lang.get('catedit_catbox_link_showcategorization');
         linkbox.onclick = function() { ajaxTagToCat(); return false; };
         catHTMLBuf = catbox.innerHTML;
         catbox.innerHTML = '';
-        catbox.appendChild(document.createTextNode('Page tags: '));
+        catbox.appendChild(document.createTextNode($lang.get('tags_lbl_page_tags')+' '));
         if ( json.tags.length < 1 )
         {
-          catbox.appendChild(document.createTextNode('No tags on this page'));
+          catbox.appendChild(document.createTextNode($lang.get('tags_lbl_no_tags')));
         }
         for ( var i = 0; i < json.tags.length; i++ )
         {
@@ -1040,7 +941,7 @@ function ajaxCatToTag()
           var addlink = document.createElement('a');
           addlink.href = '#';
           addlink.onclick = function() { try { ajaxAddTagStage1(); } catch(e) { }; return false; };
-          addlink.appendChild(document.createTextNode('(add a tag)'));
+          addlink.appendChild(document.createTextNode($lang.get('tags_btn_add_tag')));
           catbox.appendChild(addlink);
         }
       }
@@ -1059,7 +960,7 @@ function ajaxAddTagStage1()
   var addlink = document.createElement('a');
   addlink.href = '#';
   addlink.onclick = function() { ajaxAddTagStage2(this.parentNode.firstChild.nextSibling.value, this.parentNode); return false; };
-  addlink.appendChild(document.createTextNode('+ Add'));
+  addlink.appendChild(document.createTextNode($lang.get('tags_btn_add')));
   text.type = 'text';
   text.size = '15';
   text.onkeyup = function(e)
@@ -1071,7 +972,7 @@ function ajaxAddTagStage1()
   }
   
   adddiv.style.margin = '5px 0 0 0';
-  adddiv.appendChild(document.createTextNode('Add a tag: '));
+  adddiv.appendChild(document.createTextNode($lang.get('tags_lbl_add_tag')+' '));
   adddiv.appendChild(text);
   adddiv.appendChild(document.createTextNode(' '));
   adddiv.appendChild(addlink);
@@ -1113,7 +1014,7 @@ function ajaxAddTagStage2(tag, nukeme)
           var node = parent.childNodes[1];
           var insertafter = false;
           var nukeafter = false;
-          if ( node.nodeValue == 'No tags on this page' )
+          if ( node.nodeValue == $lang.get('tags_lbl_no_tags') )
           {
             nukeafter = true;
           }
@@ -1154,12 +1055,12 @@ function ajaxDeleteTag(parentobj, tag_id)
   var writeNoTags = false;
   if ( parentobj.previousSibling.previousSibling.previousSibling.nodeValue == ', ' )
     arrDelete.push(parentobj.previousSibling.previousSibling.previousSibling);
-  else if ( parentobj.previousSibling.previousSibling.previousSibling.nodeValue == 'Page tags: ' )
+  else if ( parentobj.previousSibling.previousSibling.previousSibling.nodeValue == $lang.get('tags_lbl_page_tags') + ' ' )
     arrDelete.push(parentobj.nextSibling);
   
-  if ( parentobj.previousSibling.previousSibling.previousSibling.nodeValue == 'Page tags: ' &&
+  if ( parentobj.previousSibling.previousSibling.previousSibling.nodeValue == $lang.get('tags_lbl_page_tags') + ' ' &&
        parentobj.nextSibling.nextSibling.firstChild )
-    if ( parentobj.nextSibling.nextSibling.firstChild.nodeValue == '(add a tag)')
+    if ( parentobj.nextSibling.nextSibling.firstChild.nodeValue == $lang.get('tags_btn_add_tag'))
       writeNoTags = true;
     
   ajaxPost(stdAjaxPrefix + '&_mode=deltag', 'tag_id=' + String(tag_id), function()
@@ -1177,7 +1078,7 @@ function ajaxDeleteTag(parentobj, tag_id)
           }
           if ( writeNoTags )
           {
-            var node1 = document.createTextNode('No tags on this page');
+            var node1 = document.createTextNode($lang.get('tags_lbl_no_tags'));
             var node2 = document.createTextNode(' ');
             insertAfter(parent, node1, parent.firstChild);
             insertAfter(parent, node2, node1);
@@ -1200,7 +1101,7 @@ function ajaxTagToCat()
     return false;
   addtag_open = false;
   var linkbox = catbox.parentNode.firstChild.firstChild.nextSibling;
-  linkbox.firstChild.nodeValue = 'show page tags';
+  linkbox.firstChild.nodeValue = $lang.get('tags_catbox_link');
   linkbox.onclick = function() { ajaxCatToTag(); return false; };
   catbox.innerHTML = catHTMLBuf;
   catHTMLBuf = false;
@@ -1223,7 +1124,7 @@ function ajaxToggleKeepalive()
     if ( keepalive_interval )
       clearInterval(keepalive_interval);
     var span = document.getElementById('keepalivestat');
-    span.firstChild.nodeValue = 'Turn on keep-alive';
+    span.firstChild.nodeValue = $lang.get('adm_btn_keepalive_off');
   }
   else
   {
@@ -1231,7 +1132,7 @@ function ajaxToggleKeepalive()
     if ( !keepalive_interval )
       keepalive_interval = setInterval('ajaxPingServer();', 600000);
     var span = document.getElementById('keepalivestat');
-    span.firstChild.nodeValue = 'Turn off keep-alive';
+    span.firstChild.nodeValue = $lang.get('adm_btn_keepalive_on');
     ajaxPingServer();
   }
 }
@@ -1243,19 +1144,226 @@ var keepalive_onload = function()
     if ( !keepalive_interval )
       keepalive_interval = setInterval('ajaxPingServer();', 600000);
     var span = document.getElementById('keepalivestat');
-    span.firstChild.nodeValue = 'Turn off keep-alive';
+    span.firstChild.nodeValue = $lang.get('adm_btn_keepalive_on');
   }
   else
   {
     if ( keepalive_interval )
       clearInterval(keepalive_interval);
     var span = document.getElementById('keepalivestat');
-    span.firstChild.nodeValue = 'Turn on keep-alive';
+    span.firstChild.nodeValue = $lang.get('adm_btn_keepalive_off');
   }
 };
 
 function aboutKeepAlive()
 {
-  new messagebox(MB_OK|MB_ICONINFORMATION, 'About the keep-alive feature', 'Keep-alive is a new Enano feature that keeps your administrative session from timing out while you are using the administration panel. This feature can be useful if you are editing a large page or doing something in the administration interface that will take longer than 15 minutes.<br /><br />For security reasons, Enano mandates that high-privilege logins last only 15 minutes, with the time being reset each time a page is loaded (or, more specifically, each time the session API is started). The consequence of this is that if you are performing an action in the administration panel that takes more than 15 minutes, your session may be terminated. The keep-alive feature attempts to relieve this by sending a "ping" to the server every 10 minutes.<br /><br />Please note that keep-alive state is determined by a cookie. Thus, if you log out and then back in as a different administrator, keep-alive will use the same setting that was used when you were logged in as the first administrative user. In the same way, if you log into the administration panel under your account from another computer, keep-alive will be set to "off".<br /><br /><b>For more information:</b><br /><a href="http://docs.enanocms.org/Help:Appendix_B" onclick="window.open(this.href); return false;">Overview of Enano'+"'"+'s security model');
+  new messagebox(MB_OK|MB_ICONINFORMATION, $lang.get('user_keepalive_info_title'), $lang.get('user_keepalive_info_body'));
+}
+
+function ajaxShowCaptcha(code)
+{
+  var mydiv = document.createElement('div');
+  mydiv.style.backgroundColor = '#FFFFFF';
+  mydiv.style.padding = '10px';
+  mydiv.style.position = 'absolute';
+  mydiv.style.top = '0px';
+  mydiv.id = 'autoCaptcha';
+  mydiv.style.zIndex = String( getHighestZ() + 1 );
+  var img = document.createElement('img');
+  img.onload = function()
+  {
+    if ( this.loaded )
+      return true;
+    var mydiv = document.getElementById('autoCaptcha');
+    var width = getWidth();
+    var divw = $(mydiv).Width();
+    var left = ( width / 2 ) - ( divw / 2 );
+    mydiv.style.left = left + 'px';
+    fly_in_top(mydiv, false, true);
+    this.loaded = true;
+  };
+  img.src = makeUrlNS('Special', 'Captcha/' + code);
+  img.onclick = function() { this.src = this.src + '/a'; };
+  img.style.cursor = 'pointer';
+  mydiv.appendChild(img);
+  domObjChangeOpac(0, mydiv);
+  var body = document.getElementsByTagName('body')[0];
+  body.appendChild(mydiv);
+}
+
+function ajaxUpdateCheck(targetelement)
+{
+  if ( !document.getElementById(targetelement) )
+  {
+    return false;
+  }
+  var target = document.getElementById(targetelement);
+  target.innerHTML = '';
+  var img = document.createElement('img');
+  img.src = scriptPath + '/images/loading.gif';
+  img.alt = 'Loading...';
+  target.appendChild(img);
+  ajaxGet(makeUrlNS('Admin', 'Home/updates.xml'), function()
+    {
+      if ( ajax.readyState == 4 )
+      {
+        var releases = new Array();
+        var update_available = false;
+        if ( ajax.responseXML == null )
+        {
+          alert("Error fetching updates list:\n" + ajax.responseText);
+          return false;
+        }
+        if ( ajax.responseXML.firstChild.tagName == 'enano' )
+        {
+          var enanotag = ajax.responseXML.firstChild;
+          for ( var i = 0; i < enanotag.childNodes.length; i++ )
+          {
+            if ( enanotag.childNodes[i].tagName == 'error' )
+            {
+              alert(enanotag.childNodes[i].firstChild.nodeValue);
+            }
+            else if ( enanotag.childNodes[i].tagName == 'latest' )
+            {
+              // got <latest>
+              var latesttag = enanotag.childNodes[i];
+              for ( var i = 0; i < latesttag.childNodes.length; i++ )
+              {
+                var node = latesttag.childNodes[i];
+                if ( node.tagName == 'release' )
+                {
+                  var releasedata = new Object();
+                  for ( var i = 0; i < node.attributes.length; i++ )
+                  {
+                    releasedata[node.attributes[i].nodeName] = node.attributes[i].nodeValue;
+                  }
+                  releases.push(releasedata);
+                }
+                else if ( node.tagName == 'haveupdates' )
+                {
+                  update_available = true;
+                }
+              }
+              break;
+            }
+          }
+        }
+        else
+        {
+          if ( window.console )
+            window.console.error('Invalid XML response');
+          return false;
+        }
+        var thediv = document.getElementById(targetelement);
+        thediv.innerHTML = '';
+        if ( !thediv )
+        {
+          if ( window.console )
+            window.console.error('Can\'t get the div');
+          return false;
+        }
+        if ( releases.length > 0 )
+        {
+          thediv.className = 'tblholder';
+          if ( update_available )
+          {
+            var infobox = document.createElement('div');
+            infobox.className = 'info-box-mini';
+            infobox.appendChild(document.createTextNode('An update for Enano is available. The newest release is highlighted below.'));
+            infobox.style.borderWidth = '0';
+            infobox.style.margin = '0 0 0 0';
+            thediv.appendChild(infobox);
+          }
+          else
+          {
+            var infobox = document.createElement('div');
+            infobox.className = 'info-box-mini';
+            infobox.appendChild(document.createTextNode('No new updates are available. The latest available releases are shown below.'));
+            infobox.style.borderWidth = '0';
+            infobox.style.margin = '0 0 0 0';
+            thediv.appendChild(infobox);
+          }
+          var table = document.createElement('table');
+          table.border = '0';
+          table.cellspacing = '1';
+          table.cellpadding = '4';
+          
+          var tr = document.createElement('tr');
+          
+          var td1 = document.createElement('th');
+          var td2 = document.createElement('th');
+          var td3 = document.createElement('th');
+          var td4 = document.createElement('th');
+          
+          td1.appendChild( document.createTextNode('Release type') );
+          td2.appendChild( document.createTextNode('Version') );
+          td3.appendChild( document.createTextNode('Code name') );
+          td4.appendChild( document.createTextNode('Release notes') );
+          
+          tr.appendChild(td1);
+          tr.appendChild(td2);
+          tr.appendChild(td3);
+          tr.appendChild(td4);
+            
+          table.appendChild(tr);
+          
+          var cls = 'row2';
+          
+          var j = 0;
+          for ( var i in releases )
+          {
+            j++;
+            if ( j > 5 )
+              break;
+            if ( update_available && j == 1 )
+              cls = 'row1_green';
+            else
+              cls = ( cls == 'row1' ) ? 'row2' : 'row1';
+            var release = releases[i];
+            var tr = document.createElement('tr');
+            window.console.debug(release);
+            
+            var td1 = document.createElement('td');
+            var td2 = document.createElement('td');
+            var td3 = document.createElement('td');
+            var td4 = document.createElement('td');
+            
+            td1.className = cls;
+            td2.className = cls;
+            td3.className = cls;
+            td4.className = cls;
+            
+            if ( release.tag )
+              td1.appendChild( document.createTextNode(release.tag) );
+            
+            if ( release.version )
+              td2.appendChild( document.createTextNode(release.version) );
+            
+            if ( release.codename )
+              td3.appendChild( document.createTextNode(release.codename) );
+            
+            if ( release.relnotes )
+            {
+              var a = document.createElement('a');
+              a.href = release.relnotes;
+              a.appendChild(document.createTextNode('View'));
+              td4.appendChild( a );
+            }
+            
+            tr.appendChild(td1);
+            tr.appendChild(td2);
+            tr.appendChild(td3);
+            tr.appendChild(td4);
+            
+            table.appendChild(tr);
+          }
+          thediv.appendChild(table);
+        }
+        else
+        {
+          thediv.appendChild(document.createTextNode('No releases available.'));
+        }
+      }
+    });
 }
 

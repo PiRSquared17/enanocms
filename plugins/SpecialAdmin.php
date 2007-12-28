@@ -10,7 +10,7 @@ Author URI: http://enanocms.org/
 
 /*
  * Enano - an open-source CMS capable of wiki functions, Drupal-like sidebar blocks, and everything in between
- * Version 1.0.3 (Dyrad)
+ * Version 1.1.1
  * Copyright (C) 2006-2007 Dan Fuhry
  *
  * This program is Free Software; you can redistribute and/or modify it under the terms of the GNU General Public License
@@ -22,17 +22,17 @@ Author URI: http://enanocms.org/
  
 global $db, $session, $paths, $template, $plugins; // Common objects
 
-$plugins->attachHook('base_classes_initted', '
+$plugins->attachHook('session_started', '
   global $paths;
     $paths->add_page(Array(
-      \'name\'=>\'Administration\',
+      \'name\'=>\'specialpage_administration\',
       \'urlname\'=>\'Administration\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
       ));
     
     $paths->add_page(Array(
-      \'name\'=>\'Manage the Sidebar\',
+      \'name\'=>\'specialpage_manage_sidebar\',
       \'urlname\'=>\'EditSidebar\',
       \'namespace\'=>\'Special\',
       \'special\'=>0,\'visible\'=>1,\'comments_on\'=>0,\'protected\'=>1,\'delvotes\'=>0,\'delvote_ips\'=>\'\',
@@ -48,9 +48,44 @@ require(ENANO_ROOT . '/plugins/admin/UserManager.php');
 
 function page_Admin_Home() {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
+    return;
+  }
+  
+  if ( $paths->getParam(0) == 'updates.xml' )
+  {
+    require_once(ENANO_ROOT . '/includes/http.php');
+    $req = new Request_HTTP('germantown.enanocms.org', '/meta/updates.xml');
+    $response = $req->get_response_body();
+    header('Content-type: application/xml');
+    if ( $req->response_code != HTTP_OK )
+    {
+      // Error in response
+      echo '<enano><latest><error><![CDATA[
+Did not properly receive response from server. Response code: ' . $req->response_code . ' ' . $req->response_string . '
+]]></error></latest></enano>';
+    }
+    else
+    {
+      // Retrieve first update
+      $first_update = preg_match('/<release tag="([^"]+)" version="([^"]+)" (codename="([^"]+)" )?relnotes="([^"]+)" ?\/>/', $response, $match);
+      if ( !$first_update )
+      {
+        echo '<enano><latest><error><![CDATA[
+Received invalid XML response.
+]]></error></latest></enano>';
+      }
+      if ( version_compare(enano_version(true), $match[2], '<') )
+      {
+        $response = str_replace_once('</latest>', "  <haveupdates />\n  </latest>", $response);
+      }
+      echo $response;
+    }
     return;
   }
   
@@ -74,6 +109,10 @@ Using the links on the left you can control every aspect of your website\'s look
   {
     echo '<div class="error-box"><b>NOTE:</b> It appears that your install.php and/or schema.sql files still exist. It is HIGHLY RECOMMENDED that you delete or rename these files, to prevent getting your server hacked.</div>';
   }
+  
+  echo '<h3>Check for updates</h3>';
+  echo '<p>Periodically, new releases of Enano will be made available. Click the button below to check for updates to Enano. During this process, a request will be sent to the Enano CMS server (germantown.enanocms.org) over HTTP for an <a href="http://germantown.enanocms.org/meta/updates.xml">XML file</a> containing a list of the latest releases. No information about your Enano installation will be transmitted.</p>';
+  echo '<div id="update_check_container"><input type="button" onclick="ajaxUpdateCheck(this.parentNode.id);" value="Check for updates" /></div>';
   
   // Inactive users
   $q = $db->sql_query('SELECT * FROM '.table_prefix.'logs WHERE log_type=\'admin\' AND action=\'activ_req\';');
@@ -115,9 +154,12 @@ Using the links on the left you can control every aspect of your website\'s look
 
 function page_Admin_GeneralConfig() {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -139,6 +181,8 @@ function page_Admin_GeneralConfig() {
     if(isset($_POST['editmsg']))                 setConfig('wiki_edit_notice', '1');
     else                                         setConfig('wiki_edit_notice', '0');
     setConfig('wiki_edit_notice_text', $_POST['editmsg_text']);
+    if(isset($_POST['guest_edit_require_captcha'])) setConfig('guest_edit_require_captcha', '1');
+    else                                         setConfig('guest_edit_require_captcha', '0');
     
     // Stats
     if(isset($_POST['log_hits']))                setConfig('log_hits', '1');
@@ -203,6 +247,45 @@ function page_Admin_GeneralConfig() {
       setConfig('pw_strength_minimum', $strength);
     }
     
+    // Account lockout policy
+    if ( preg_match('/^[0-9]+$/', $_POST['lockout_threshold']) )
+      setConfig('lockout_threshold', $_POST['lockout_threshold']);
+    
+    if ( preg_match('/^[0-9]+$/', $_POST['lockout_duration']) )
+      setConfig('lockout_duration', $_POST['lockout_duration']);
+    
+    if ( in_array($_POST['lockout_policy'], array('disable', 'captcha', 'lockout')) )
+      setConfig('lockout_policy', $_POST['lockout_policy']);
+    
+    // Avatar settings
+    setConfig('avatar_enable', ( isset($_POST['avatar_enable']) ? '1' : '0' ));
+    // for these next three values, set the config value if it's a valid integer; this is
+    // done by using strval(intval($foo)) === $foo, which flattens $foo to an integer and
+    // then converts it back to a string. This effectively verifies that var $foo is both
+    // set and that it's a valid string representing an integer.
+    setConfig('avatar_max_size', ( strval(intval($_POST['avatar_max_size'])) === $_POST['avatar_max_size'] ? $_POST['avatar_max_size'] : '10240' ));
+    setConfig('avatar_max_width', ( strval(intval($_POST['avatar_max_width'])) === $_POST['avatar_max_width'] ? $_POST['avatar_max_width'] : '96' ));
+    setConfig('avatar_max_height', ( strval(intval($_POST['avatar_max_height'])) === $_POST['avatar_max_height'] ? $_POST['avatar_max_height'] : '96' ));
+    setConfig('avatar_enable_anim', ( isset($_POST['avatar_enable_anim']) ? '1' : '0' ));
+    setConfig('avatar_upload_file', ( isset($_POST['avatar_upload_file']) ? '1' : '0' ));
+    setConfig('avatar_upload_http', ( isset($_POST['avatar_upload_http']) ? '1' : '0' ));
+    
+    if ( is_dir(ENANO_ROOT . '/' . $_POST['avatar_directory']) )
+    {
+      if ( preg_match('/^([A-z0-9_-]+)(\/([A-z0-9_-]+))*$/', $_POST['avatar_directory']) )
+      {
+        setConfig('avatar_directory', $_POST['avatar_directory']);
+      }
+      else
+      {
+        echo '<div class="error-box">You have entered an invalid avatar directory.</div>';
+      }
+    }
+    else
+    {
+      echo '<div class="error-box">You have entered an invalid avatar directory.</div>';
+    }
+    
     echo '<div class="info-box">Your changes to the site configuration have been saved.</div><br />';
     
   }
@@ -229,7 +312,7 @@ function page_Admin_GeneralConfig() {
       
     <!-- Wiki mode -->
       
-      <tr><th colspan="2">Wiki mode</th></tr>
+      <tr><th class="subhead" colspan="2">Wiki mode</th></tr>
       
       <tr>
         <td class="row3" rowspan="2">
@@ -260,9 +343,22 @@ function page_Admin_GeneralConfig() {
         </td>
       </tr>
       
+      <tr>
+        <td class="row1">
+          <b>Require visual confirmation for guests editing pages</b><br />
+          If this is enabled, guests will be asked to enter a visual confirmation code before saving changes to a page.
+        </td>
+        <td class="row1">
+          <label>
+            <input type="checkbox" name="guest_edit_require_captcha" <?php if ( getConfig('guest_edit_require_captcha') == '1' ) echo 'checked="checked" '; ?>/>
+            Require guests to complete a CAPTCHA when editing pages
+          </label>
+        </td>
+      </tr>
+      
     <!-- Site statistics -->
     
-      <tr><th colspan="2">Statistics and hit counting</th></tr>
+      <tr><th class="subhead" colspan="2">Statistics and hit counting</th></tr>
       
       <tr>
         <td class="row1">Enano has the ability to show statistics for every page on the site. This allows you to keep very close track of who is visiting your site, and from where.<br /><br />Unfortunately, some users don't like being logged. For this reason, you should state clearly what is logged (usually the username or IP address, current time, page name, and referer URL) in your privacy policy. If your site is primarily geared towards children, and you are a United States citizen, you are required to have a privacy policy stating exactly what is being logged under the terms of the Childrens' Online Privacy Protection Act.</td>
@@ -271,7 +367,7 @@ function page_Admin_GeneralConfig() {
       
     <!-- Comment options -->
       
-      <tr><th colspan="2">Comment system</th></tr>
+      <tr><th class="subhead" colspan="2">Comment system</th></tr>
       <tr><td class="row1"><label for="enable-comments"><b>Enable the comment system</b></label>                      </td><td class="row1"><input name="enable-comments"  id="enable-comments"  type="checkbox" <?php if(getConfig('enable_comments')=='1')  echo('CHECKED '); ?>/></td></tr>
       <tr><td class="row2"><label for="comment-approval">Require approval before article comments can be shown</label></td><td class="row2"><input name="comment-approval" id="comment-approval" type="checkbox" <?php if(getConfig('approve_comments')=='1') echo('CHECKED '); ?>/></td></tr>
       <tr><td class="row1">Guest comment posting allowed                                                              </td><td class="row1"><label><input name="comments_need_login" type="radio" value="0" <?php if(getConfig('comments_need_login')=='0') echo 'CHECKED '; ?>/> Yes</label>
@@ -292,28 +388,9 @@ function page_Admin_GeneralConfig() {
       
       -->
       
-    <!-- enanocms.org link -->
-    
-    <tr>
-      <th colspan="2">Promote Enano</th>
-    </tr>
-    <tr>
-      <td class="row3">
-        If you think Enano is nice, or if you want to show your support for the Enano team, you can do so by placing a link to the Enano
-        homepage in your Links sidebar block. You absolutely don't have to do this, and you won't get degraded support if you don't. Because
-        Enano is still relatively new in the CMS world, it needs all the attention it can get - and you can easily help to spread the word
-        using this link.
-      </td>
-      <td class="row1">
-        <label>
-          <input name="enano_powered_link" type="checkbox" <?php if(getConfig('powered_btn') == '1') echo 'checked="checked"'; ?> />&nbsp;&nbsp;Place a link to enanocms.org on the sidebar
-        </label>
-      </td>
-    </tr>
-      
     <!-- Site disablement -->
     
-      <tr><th colspan="2">Disable all site access</th></tr>
+      <tr><th class="subhead" colspan="2">Disable all site access</th></tr>
       
       <tr>
         <td class="row3" rowspan="2">Disabling the site allows you to work on the site without letting non-administrators see or use it.</td>
@@ -327,10 +404,20 @@ function page_Admin_GeneralConfig() {
           </div>
         </td>
       </tr>
+      
+    </table>
+    </div>
+        
+    <div class="tblholder">
+    <table border="0" width="100%" cellspacing="1" cellpadding="4">
+    
+    <tr>
+      <th colspan="2">Users and communication</th>
+    </tr>
     
     <!-- Account activation -->
       
-      <tr><th colspan="2">User account activation</th></tr>
+      <tr><th class="subhead" colspan="2">User account activation</th></tr>
       
       <tr>
         <td class="row3" colspan="2">
@@ -341,7 +428,7 @@ function page_Admin_GeneralConfig() {
       </tr>
       
       <tr>
-        <td class="row1">Account activation:</td><td class="row1">
+      <td class="row1" style="width: 50%;">Account activation:</td><td class="row1">
           <?php
           echo '<label><input'; if(getConfig('account_activation') == 'disable') echo ' checked="checked"'; echo ' type="radio" name="account_activation" value="disable" /> Disable registration</label><br />';
           echo '<label><input'; if(getConfig('account_activation') != 'user' && getConfig('account_activation') != 'admin' && getConfig('account_activation') != 'disable') echo ' checked="checked"'; echo ' type="radio" name="account_activation" value="none" /> None</label>';
@@ -351,7 +438,44 @@ function page_Admin_GeneralConfig() {
         </td>
       </tr>
       
-      <tr><th colspan="2">Password strength</th></tr>
+    <!-- Account lockout -->
+    
+      <tr><th class="subhead" colspan="2">Account lockouts</th></tr>
+      
+      <tr><td class="row3" colspan="2">Configure Enano to prevent or restrict logins for a specified period of time if a user enters an incorrect password a specific number of times.</td></tr>
+      
+      <tr>
+        <td class="row2">Lockout threshold:<br />
+          <small>How many times can a user enter wrong credentials before a lockout goes into effect?</small>
+        </td>
+        <td class="row2">
+          <input type="text" name="lockout_threshold" value="<?php echo ( $_ = getConfig('lockout_threshold') ) ? $_ : '5' ?>" />
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row1">Lockout duration:<br />
+          <small>This is how long an account lockout should last, in minutes.</small>
+        </td>
+        <td class="row1">
+          <input type="text" name="lockout_duration" value="<?php echo ( $_ = getConfig('lockout_duration') ) ? $_ : '15' ?>" />
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row2">Lockout policy:<br />
+          <small>What should be done when a lockout goes into effect?</small>
+        </td>
+        <td class="row2">
+          <label><input type="radio" name="lockout_policy" value="disable" <?php if ( getConfig('lockout_policy') == 'disable' ) echo 'checked="checked"'; ?> /> Don't do anything</label><br />
+          <label><input type="radio" name="lockout_policy" value="captcha" <?php if ( getConfig('lockout_policy') == 'captcha' ) echo 'checked="checked"'; ?> /> Require visual confirmation</label><br />
+          <label><input type="radio" name="lockout_policy" value="lockout" <?php if ( getConfig('lockout_policy') == 'lockout' || !getConfig('lockout_policy') ) echo 'checked="checked"'; ?> /> Prevent all login attempts</label>
+        </td>
+      </tr>
+      
+    <!-- Password strength -->
+      
+      <tr><th class="subhead" colspan="2">Password strength</th></tr>
       
       <tr>
         <td class="row2">
@@ -375,22 +499,125 @@ function page_Admin_GeneralConfig() {
       
     <!-- E-mail options -->
     
-    <tr><th colspan="2">E-mail sent from the site</th></tr>
-    <tr><td class="row1">E-mail sending method:<br /><small>Try using the built-in e-mail method first. If that doesn't work, you will need to enter valid SMTP information here.</small></td>
-        <td class="row1"><label><input <?php if(getConfig('smtp_enabled') != '1') echo 'checked="checked"'; ?> type="radio" name="emailmethod" value="phpmail" />PHP's built-in mail() function</label><br />
-                         <label><input <?php if(getConfig('smtp_enabled') == '1') echo 'checked="checked"'; ?> type="radio" name="emailmethod" value="smtp" />Use an external SMTP server</label></td>
-        </tr>
-    <tr><td class="row2">SMTP hostname:<br /><small>This option only applies to the external SMTP mode.</small></td>
-        <td class="row2"><input value="<?php echo getConfig('smtp_server'); ?>" name="smtp_host" type="text" size="30" /></td>
-        </tr>
-    <tr><td class="row1">SMTP credentials:<br /><small>This option only applies to the external SMTP mode.</small></td>
-        <td class="row1">Username: <input value="<?php echo getConfig('smtp_user'); ?>" name="smtp_user" type="text" size="30" /><br />
-            Password: <input value="<?php if(getConfig('smtp_password') != false) echo 'XXXXXXXXXXXX'; ?>" name="smtp_pass" type="password" size="30" /></td>
-        </tr>
+      <tr><th class="subhead" colspan="2">E-mail sent from the site</th></tr>
+      <tr><td class="row1">E-mail sending method:<br /><small>Try using the built-in e-mail method first. If that doesn't work, you will need to enter valid SMTP information here.</small></td>
+          <td class="row1"><label><input <?php if(getConfig('smtp_enabled') != '1') echo 'checked="checked"'; ?> type="radio" name="emailmethod" value="phpmail" />PHP's built-in mail() function</label><br />
+                           <label><input <?php if(getConfig('smtp_enabled') == '1') echo 'checked="checked"'; ?> type="radio" name="emailmethod" value="smtp" />Use an external SMTP server</label></td>
+          </tr>
+      <tr><td class="row2">SMTP hostname:<br /><small>This option only applies to the external SMTP mode.</small></td>
+          <td class="row2"><input value="<?php echo getConfig('smtp_server'); ?>" name="smtp_host" type="text" size="30" /></td>
+          </tr>
+      <tr><td class="row1">SMTP credentials:<br /><small>This option only applies to the external SMTP mode.</small></td>
+          <td class="row1">Username: <input value="<?php echo getConfig('smtp_user'); ?>" name="smtp_user" type="text" size="30" /><br />
+              Password: <input value="<?php if(getConfig('smtp_password') != false) echo 'XXXXXXXXXXXX'; ?>" name="smtp_pass" type="password" size="30" /></td>
+          </tr>
+        
+    <!-- Avatar support -->
+    
+      <tr>
+        <th class="subhead" colspan="2">Avatars</th>
+      </tr>
+      
+      <tr>
+        <td class="row3" colspan="2">
+          Avatars are small images that users can display on their profiles and in comments.
+        </th>
+      </tr>
+      
+      <tr>
+        <td class="row1">
+          Enable avatar support:<br />
+          <small>Supported formats are JPEG, PNG, and GIF&trade;.</small>
+        </td>
+        <td class="row1">
+          <label><input type="checkbox" name="avatar_enable" <?php if ( getConfig('avatar_enable') == '1' ) echo 'checked="checked" '; ?>/> Enabled</label>
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row2">
+          Maximum avatar file size:<br />
+          <small>For smaller sites, the highest value for this should be about 50KB, 51200. Larger sites with more visitors will likely want to use something much smaller, such as 10KB.</small>
+        </td>
+        <td class="row2">
+          <input type="text" name="avatar_max_size" size="7" <?php if ( ($x = getConfig('avatar_max_size')) !== false ) echo "value=\"$x\" "; else echo "value=\"10240\" "; ?>/> bytes
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row1">
+          Maximum avatar dimensions:<br />
+          <small>The format is width &#215; height. Typically you want to have this square (the same width and height). These are only maximum dimensions; users are not prevented from having smaller images.</small>
+        </td>
+        <td class="row1">
+          <input type="text" name="avatar_max_width" size="7" <?php if ( $x = getConfig('avatar_max_width') ) echo "value=\"$x\" "; else echo "value=\"150\" "; ?>/> &#215;
+          <input type="text" name="avatar_max_height" size="7" <?php if ( $x = getConfig('avatar_max_height') ) echo "value=\"$x\" "; else echo "value=\"150\" "; ?>/> pixels
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row2">
+          Allow animated avatars:<br />
+          <small>If this is checked, users can upload APNG and Animated GIF&trade; avatars. Sometimes such images can be specifically made to be distracting, like rapidly flashing images. If this is unchecked, these formats will be blocked, and only still PNGs and GIFs will be allowed.</small>
+        </td>
+        <td class="row2">
+          <label><input type="checkbox" name="avatar_enable_anim" <?php if ( getConfig('avatar_enable_anim') == '1' ) echo 'checked="checked" '; ?>/> Don't block animated images</label>
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row1">
+          Allowed upload methods:<br />
+          <small></small>
+        </td>
+        <td class="row1">
+          <label><input type="checkbox" name="avatar_upload_file" <?php if ( getConfig('avatar_upload_file') == '1' || getConfig('avatar_upload_file') === false ) echo 'checked="checked" '; ?>/> Allow users to upload image files from their computers</label><br />
+          <label><input type="checkbox" name="avatar_upload_http" <?php if ( getConfig('avatar_upload_http') == '1' || getConfig('avatar_upload_http') === false ) echo 'checked="checked" '; ?>/> Allow users to enter a URL to their desired avatar</label>
+        </td>
+      </tr>
+      
+      <tr>
+        <td class="row2">
+          Avatar storage directory:<br />
+          <small>This should be relative to your Enano root and should contain only alphanumeric characters and forward slashes, even if your server runs Windows.</small>
+        </td>
+        <td class="row2">
+          <input type="text" name="avatar_directory" size="30" <?php if ( $x = getConfig('avatar_directory') ) echo "value=\"$x\" "; else echo "value=\"files/avatars\" "; ?>/>
+        </td>
+      </tr>
+        
+    </table>
+    </div>
+        
+    <div class="tblholder">
+    <table border="0" width="100%" cellspacing="1" cellpadding="4">
+    
+    <tr>
+      <th colspan="2">Sidebar links</th>
+    </tr>
+    
+    <!-- enanocms.org link -->
+    
+    <tr>
+      <th colspan="2" class="subhead">Promote Enano</th>
+    </tr>
+    <tr>
+    <td class="row3" style="width: 50%;">
+        If you think Enano is nice, or if you want to show your support for the Enano team, you can do so by placing a link to the Enano
+        homepage in your Links sidebar block. You absolutely don't have to do this, and you won't get degraded support if you don't. Because
+        Enano is still relatively new in the CMS world, it needs all the attention it can get - and you can easily help to spread the word
+        using this link.
+      </td>
+      <td class="row1">
+        <label>
+          <input name="enano_powered_link" type="checkbox" <?php if(getConfig('powered_btn') == '1') echo 'checked="checked"'; ?> />&nbsp;&nbsp;Place a link to enanocms.org on the sidebar
+        </label>
+      </td>
+    </tr>
       
     <!-- SourceForge.net logo -->
       
-      <tr><th colspan="2">SourceForge.net logo</th></tr>
+      <tr><th class="subhead" colspan="2">SourceForge.net logo</th></tr>
       
       <tr>
         <td colspan="2" class="row3">
@@ -435,8 +662,8 @@ function page_Admin_GeneralConfig() {
       
     <!-- W3C validator buttons -->
       
-      <tr><th colspan="2">W3C compliance logos</th></tr>
-      <tr><th colspan="2" class="subhead">Enano generates (by default) Valid XHTML 1.1 code, plus valid CSS.  If you want to show this off, check the appropriate boxes below.</th></tr>
+      <tr><th class="subhead" colspan="2">W3C compliance logos</th></tr>
+      <tr><td colspan="2" class="row3">Enano generates (by default) Valid XHTML 1.1 code, plus valid CSS.  If you want to show this off, check the appropriate boxes below.</th></tr>
       
       <tr><td class="row1"><label for="w3c-vh32">HTML 3.2</label>     </td><td class="row1"><input type="checkbox" <?php if(getConfig('w3c_vh32')=='1')     echo('CHECKED '); ?> id="w3c-vh32"     name="w3c-vh32"     /></td></tr>
       <tr><td class="row2"><label for="w3c-vh40">HTML 4.0</label>     </td><td class="row2"><input type="checkbox" <?php if(getConfig('w3c_vh40')=='1')     echo('CHECKED '); ?> id="w3c-vh40"     name="w3c-vh40"     /></td></tr>
@@ -447,13 +674,19 @@ function page_Admin_GeneralConfig() {
 
     <!-- DefectiveByDesign.org ad -->      
       
-      <tr><th colspan="2">Defective By Design Anti-DRM button</th></tr>
+      <tr><th class="subhead" colspan="2">Defective By Design Anti-DRM button</th></tr>
       <tr><td colspan="2" class="row3"><b>The Enano project is strongly against Digital Restrictions Management.</b> DRM removes the freedoms that every consumer should have: to freely copy and use digital media items they legally purchased to their own devices. Showing your opposition to DRM is as easy as checking the box below to place a link to <a href="http://www.defectivebydesign.org">DefectiveByDesign.org</a> on your sidebar.</td></tr>
       <tr><td class="row1"><label for="dbdbutton">Help stop DRM by placing a link to DBD on the sidebar!</label></td><td class="row1"><input type="checkbox" name="dbdbutton" id="dbdbutton" <?php if(getConfig('dbd_button')=='1')  echo('checked="checked" '); ?>/></td></tr>
       
     <!-- Save button -->
+    
+    </table>
+    </div>
+        
+    <div class="tblholder">
+    <table border="0" width="100%" cellspacing="1" cellpadding="4">
       
-      <tr><th style="text-align: right" class="subhead" colspan="2"><input type=submit name=submit value="Save changes" /></th></tr>
+      <tr><th colspan="2"><input type="submit" name="submit" value="Save changes" /></th></tr>
       
     </table>
   </div>
@@ -464,9 +697,12 @@ function page_Admin_GeneralConfig() {
 function page_Admin_UploadConfig()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -581,9 +817,12 @@ function page_Admin_UploadConfig()
 
 function page_Admin_PluginManager() {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -722,9 +961,12 @@ function page_Admin_PluginManager() {
 function page_Admin_UploadAllowedMimeTypes()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -786,9 +1028,12 @@ function page_Admin_UploadAllowedMimeTypes()
 function page_Admin_Sidebar()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -843,9 +1088,12 @@ function page_Admin_Sidebar()
 function page_Admin_GroupManager()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -1202,9 +1450,12 @@ function page_Admin_GroupManager()
 function page_Admin_COPPA()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -1275,9 +1526,12 @@ function page_Admin_COPPA()
 function page_Admin_PageManager()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -1471,9 +1725,12 @@ function page_Admin_PageManager()
 function page_Admin_PageEditor()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -1571,9 +1828,12 @@ function page_Admin_ThemeManager()
 {
   
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -1834,15 +2094,18 @@ function page_Admin_ThemeManager()
 function page_Admin_BanControl()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
   if(isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']) && $_GET['id'] != '')
   {
-    $e = $db->sql_query('DELETE FROM '.table_prefix.'banlist WHERE ban_id=' . $db->escape($_GET['id']) . '');
+    $e = $db->sql_query('DELETE FROM '.table_prefix.'banlist WHERE ban_id=' . intval($_GET['id']) . '');
     if(!$e) $db->_die('The ban list entry was not deleted.');
   }
   if(isset($_POST['create']) && !defined('ENANO_DEMO_MODE'))
@@ -1943,9 +2206,12 @@ function page_Admin_BanControl()
 function page_Admin_MassEmail()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -2159,9 +2425,12 @@ function page_Admin_MassEmail()
 function page_Admin_DBBackup()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -2279,9 +2548,12 @@ HEADER;
 function page_Admin_AdminLogout()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   if ( $session->auth_level < USER_LEVEL_ADMIN || $session->user_level < USER_LEVEL_ADMIN )
   {
-    echo '<h3>Error: Not authenticated</h3><p>It looks like your administration session is invalid or you are not authorized to access this administration page. Please <a href="' . makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true) . '">re-authenticate</a> to continue.</p>';
+    $login_link = makeUrlNS('Special', 'Login/' . $paths->nslist['Special'] . 'Administration', 'level=' . USER_LEVEL_ADMIN, true);
+    echo '<h3>' . $lang->get('adm_err_not_auth_title') . '</h3>';
+    echo '<p>' . $lang->get('adm_err_not_auth_body', array( 'login_link' => $login_link )) . '</p>';
     return;
   }
   
@@ -2292,6 +2564,7 @@ function page_Admin_AdminLogout()
 function page_Special_Administration()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   
   if($session->auth_level < USER_LEVEL_ADMIN) {
     redirect(makeUrlNS('Special', 'Login/'.$paths->page, 'level='.USER_LEVEL_ADMIN), 'Not authorized', 'You need an authorization level of '.USER_LEVEL_ADMIN.' to use this page, your auth level is: ' . $session->auth_level, 0);
@@ -2317,7 +2590,7 @@ function page_Special_Administration()
       }
       if ( t == namespace_list.Admin + 'AdminLogout' )
       {
-        var mb = new messagebox(MB_YESNO|MB_ICONQUESTION, 'Are you sure you want to de-authenticate?', 'If you de-authenticate, you will no longer be able to use the administration panel until you re-authenticate again. You may do so at any time using the Administration button on the sidebar.');
+        var mb = new messagebox(MB_YESNO|MB_ICONQUESTION, $lang.get('user_logout_confirm_title_elev'), $lang.get('user_logout_confirm_body_elev'));
         mb.onclick['Yes'] = function() {
           var tigraentry = document.getElementById('i_div0_0').parentNode;
           var tigraobj = $(tigraentry);
@@ -2429,7 +2702,7 @@ function page_Special_Administration()
           } 
           else 
           {
-            echo '<div class="wait-box">Please wait while the administration panel loads. You need to be using a recent browser with AJAX support in order to use Runt.</div>';
+            echo '<script type="text/javascript">document.write(\'<div class="wait-box">Please wait while the administration panel loads. You need to be using a recent browser with AJAX support in order to use Runt.</div>\');</script><noscript><div class="error-box">It looks like Javascript isn\'t enabled in your browser. Please enable Javascript or use a different browser to continue.</div></noscript>';
           }
           ?>
           </div>
@@ -2454,6 +2727,7 @@ function page_Special_Administration()
 function page_Special_EditSidebar()
 {
   global $db, $session, $paths, $template, $plugins; // Common objects
+  global $lang;
   
   if($session->auth_level < USER_LEVEL_ADMIN) 
   {
@@ -2938,7 +3212,7 @@ function page_Special_EditSidebar()
           $c = ($template->fetch_block($row['block_content'])) ? $template->fetch_block($row['block_content']) : 'Can\'t find plugin block';
           break;
       }
-      $block_name = $template->tplWikiFormat($row['block_name']);
+      $block_name = $row['block_name']; // $template->tplWikiFormat($row['block_name']);
       if ( empty($block_name) )
         $block_name = '&lt;Unnamed&gt;';
       $t = '<span title="Double-click to rename this block" id="sbrename_' . $row['item_id'] . '" ondblclick="ajaxRenameSidebarStage1(this, \''.$row['item_id'].'\'); return false;">' . $block_name . '</span>';
