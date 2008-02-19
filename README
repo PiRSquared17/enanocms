@@ -1,0 +1,141 @@
+Enano CMS
+Version 1.1.2
+-----------------------------
+
+Thanks for downloading Enano! If you're looking for an installation guide,
+you can find it at <http://docs.enanocms.org/Help:2.1>.
+
+COPYRIGHT
+-----------------------------
+
+Enano CMS
+Copyright (C) 2006-2008 Dan Fuhry. All rights except those explicitly granted
+by the included license agreement reserved.
+
+PHILOSOPHY
+-----------------------------
+
+We strongly believe in the idea of Free Software. Enano is released under the
+GNU General Public License; see the file GPL included with this release for
+details.
+
+LICENSING
+-----------------------------
+
+This program is Free Software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to:
+
+  Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor
+  Boston, MA 02110-1301, USA
+
+-----------------------------
+
+Most of the PHP code in Enano was written by Dan Fuhry. Some parts were borrowed
+from other projects that are also released under Free licenses; see the various
+files under the licenses/ directory included with this release for details.
+
+If you are planning to make a commercial fork of Enano, all of the software and
+libraries included with Enano are available under licenses that allow you to do
+so; however, in compliance with the GPL, you must:
+
+a) provide attribution to the Enano team in source code files and on the
+   (renamed) Special:About_Enano page,
+b) remove all instances of the word Enano and the Enano logo from your
+   derivative work, with the exception of the following phrase, which must
+   be shown on the (renamed) Special:About_Enano page:
+
+    "The software used on this website was based on Enano CMS. Copyright
+     (C) 2006-2007 Dan Fuhry."
+
+   The words "Enano CMS" must link to the page <http://enanocms.org/>. You may
+   (at your option) also include a notice of non-endorsement by the Enano
+   Foundation, unless you're lucky enough to become an official fork
+   maintainer.
+
+c) Provide the complete source code for your modified version of Enano under
+   the terms of the GNU General Public License, and
+d) Include the complete and unmodified licenses/ directory, which contains
+   licensing information for third-party libraries that Enano uses.
+
+As permitted by the GPL, you may charge for the service of downloading Enano
+from your server; however, you may not prevent others from distributing Enano
+or any modified version.
+
+CHANGES IN THIS RELEASE
+-----------------------------
+
+Please see <http://enanocms.org/Release_notes/1.1.2> for a list of changes in
+this release.
+
+UPGRADING FROM PREVIOUS RELEASES
+-----------------------------
+
+This tarball includes a very basic migration script that you can use to change
+a 1.0.x installation into a 1.1.x one. Make sure you're using the latest 1.0.x
+release (1.0.3 at the time of this writing) BEFORE you run the migration
+script. DO NOT UPGRADE A PRODUCTION SITE.
+
+As of 1.1.2, basic upgrade functionality is included and is considered highly
+experimental. Back up your entire database and Enano root before upgrading.
+
+TRANSLATING ENANO
+-----------------------------
+
+This is the only the second formal release of Enano that is localized. Right
+now since this is an alpha, you probably don't want to do any translation
+because you'll be doing a TON more strings at every release. HOWEVER, we're
+looking for people to sign up and volunteer for translation efforts later on.
+If you have a native or very good knowledge of a language, drop us an e-mail
+and we'll get you onto the translator list and eventually onto a mailing list
+specifically for l10n.
+
+EXPANDING YOUR SITE'S CAPABILITIES
+-----------------------------
+
+There is a gallery of plugins for Enano at
+<http://enanocms.org/Category:Plugins>. It's not very full right now because
+not every plugin has a page on the website yet, and some plugins still have
+yet to be ported to work with some of the newer API changes. Being an alpha
+release you'll probably need to look in the Mercurial repositories at
+<http://hg.enanocms.org/> for the latest versions of plugins that are designed
+to work under both 1.0.x and 1.1.x.
+
+GIVING YOUR SITE A NEW LOOK
+-----------------------------
+
+You can find more themes for Enano at <http://enanocms.org/Category:Themes>.
+Again, we're still working on packaging up themes and creating pages for them,
+so try to be patient. We have quite a few themes in the works. You can create
+your own themes too; for more information, see Chapter V of the Enano
+Administrator's handbook, at <http://docs.enanocms.org/Help:5>. Unless
+specifically marked, themes on the Enano website are compatible with 1.0.x.
+While you can use 1.0.x themes under 1.1.x, some features (namely viewing IPs
+on comments and the default "Inherit" option in the ACL editor) will be missing
+unless you copy over comment.tpl and acledit.tpl respectively from Oxygen or
+one of the other themes included with this 1.1.x package.
+
+GETTING SUPPORT
+-----------------------------
+
+This is an alpha release. No support of any kind will be provided, but proper
+bug reports are appreciated. See the Enano forums at
+<http://forum.enanocms.org/> for more information.
+
+Have fun with Enano!
+
+- The Enano team
+  Dan Fuhry     <dan@enanocms.org>
+  Neal Gompa    <neal@enanocms.org>
+  Manoj Maddali <manoj@enanocms.org>
+  ThGeneral8    <the.true.general@googlemail.com>
+
