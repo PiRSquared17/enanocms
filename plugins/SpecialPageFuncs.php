@@ -424,9 +424,9 @@ function page_Special_About_Enano()
     $platform = 'Linux';
   else if(file_exists('/hurd/pfinet')) // I have a little experience with GNU/Hurd :-) http://hurdvm.enanocms.org/
     $platform = 'GNU/Hurd';
-  else if(file_exists('C:\Windows\system32\ntoskrnl.exe'))
+  else if(strtolower(PHP_OS) == 'winnt')
     $platform = 'Windows NT';
-  else if(file_exists('C:\Windows\system\krnl386.exe'))
+  else if(strtolower(PHP_OS) == 'win32')
     $platform = 'Windows 9x/DOS';
   else if(file_exists('/System/Library/CoreServices/SystemVersion.plist'))
     $platform = 'Mac OS X';
@@ -454,7 +454,7 @@ function page_Special_About_Enano()
         <h3>(English)</h3>
         <p>
           This website is powered by <a href="http://enanocms.org/">Enano</a>, the lightweight and open source CMS that everyone can use.
-          Enano is copyright &copy; 2006-2007 Dan Fuhry. For legal information, along with a list of libraries that Enano uses, please
+          Enano is copyright &copy; 2006-2009 Dan Fuhry. For legal information, along with a list of libraries that Enano uses, please
           see <a href="http://enanocms.org/Legal_information">Legal Information</a>.
         </p>
         <p>
